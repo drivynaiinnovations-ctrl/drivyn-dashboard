@@ -60,10 +60,6 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
         Send Report
       </button>
-      <button class="btn btn-ghost btn-sm" onclick="openAddInvoice()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-        Add Invoice
-      </button>
       <button class="btn btn-primary btn-sm" onclick="openAddClient()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Add Client
@@ -176,26 +172,28 @@
   <div class="view" id="view-billing">
     <div class="page-header">
       <div class="page-header-left">
-        <h2>Billing & Invoices</h2>
-        <p>Track all invoices, payments, and reminders</p>
+        <h2>Billing & Payments</h2>
+        <p>Invoices are managed in Zoho. Update payment status here when Zoho confirms payment.</p>
       </div>
       <div class="page-header-right">
-        <button class="btn btn-primary btn-sm" onclick="openAddInvoice()">+ Add Invoice</button>
+        <a href="https://invoice.zoho.com" target="_blank" class="btn btn-black btn-sm">Open Zoho ↗</a>
       </div>
     </div>
 
-    <div class="stats-grid stats-grid-4">
-      <div class="stat-card stat-card-accent"><div class="stat-label">Monthly MRR</div><div class="stat-val stat-val-accent" id="b-mrr">$0</div></div>
-      <div class="stat-card stat-card-green"><div class="stat-label">Total Collected</div><div class="stat-val stat-val-green" id="b-collected">$0</div></div>
-      <div class="stat-card stat-card-red"><div class="stat-label">Outstanding</div><div class="stat-val stat-val-red" id="b-outstanding">$0</div></div>
-      <div class="stat-card"><div class="stat-label">Setup Fees</div><div class="stat-val" id="b-setup">$0</div></div>
+    <div class="stats-grid stats-grid-3">
+      <div class="stat-card stat-card-accent"><div class="stat-label">Monthly MRR</div><div class="stat-val stat-val-accent" id="b-mrr">$0</div><div class="stat-sub">active + pilot clients</div></div>
+      <div class="stat-card stat-card-green"><div class="stat-label">Paid This Month</div><div class="stat-val stat-val-green" id="b-paid">0</div><div class="stat-sub">clients marked paid</div></div>
+      <div class="stat-card stat-card-red"><div class="stat-label">Unpaid / Overdue</div><div class="stat-val stat-val-red" id="b-unpaid">0</div><div class="stat-sub">needs follow up</div></div>
     </div>
 
-    <div class="table-wrap" id="billing-table-wrap">
-      <div class="table-header"><h3>Invoices</h3></div>
+    <div class="table-wrap">
+      <div class="table-header">
+        <h3>Payment Status</h3>
+        <span style="font-size:0.75rem;color:var(--muted)">Update status when Zoho confirms payment</span>
+      </div>
       <table>
         <thead><tr>
-          <th>Client</th><th>Type</th><th>Amount</th><th>Invoice Date</th><th>Due Date</th><th>Status</th><th>Actions</th>
+          <th>Client</th><th>Market</th><th>Monthly Fee</th><th>Status</th><th>Pilot Days</th><th>Zoho Invoice</th><th>Update Status</th>
         </tr></thead>
         <tbody id="billing-table-body"></tbody>
       </table>
@@ -475,8 +473,13 @@
             <div class="form-group"><label class="form-label">Next Invoice Date</label><input type="date" class="form-input" id="c-next-invoice-2"></div>
           </div>
         </div>
-        <div style="padding:14px;background:var(--accent-light);border:1px solid var(--accent-mid);border-radius:var(--radius-sm);font-size:0.82rem">
-          <strong>Standard pricing:</strong> $1,000/month · $500 setup · No contract · 30-day pilot at $500
+        <div class="form-section">
+          <div class="form-section-title">Zoho Invoice</div>
+          <div class="form-group">
+            <label class="form-label">Zoho Invoice URL</label>
+            <input type="text" class="form-input" id="c-zoho-url" placeholder="https://invoice.zoho.com/...">
+            <div class="form-hint">Paste the direct link to this client's Zoho invoice. Opens with one click from the dashboard.</div>
+          </div>
         </div>
       </div>
 

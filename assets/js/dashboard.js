@@ -338,15 +338,15 @@ function renderClientDetail(id) {
           ${stageIdx < 4 ? `<button class="btn btn-primary btn-sm" onclick="advanceStage('${c.id}')">Advance Stage →</button>` : '<span class="badge badge-active">Complete ✓</span>'}
         </div>
         <div class="card-body">
-          <div class="onboarding-progress">
+          <div style="display:flex;align-items:center;width:100%;margin-bottom:10px">
             ${stages.map((s,i) => `
-              <div class="onboarding-step">
-                <div class="onboarding-dot ${i<=stageIdx?'done':''} ${i===stageIdx?'current':''}" title="${stageLabels[i]}">${i<stageIdx?'✓':(i+1)}</div>
-                ${i<stages.length-1?`<div class="onboarding-line ${i<stageIdx?'done':''}"></div>`:''}
+              <div style="display:flex;align-items:center;flex:${i<stages.length-1?'1':'0'}">
+                <div class="onboarding-dot ${i<=stageIdx?'done':''} ${i===stageIdx?'current':''}" title="${stageLabels[i]}" style="flex-shrink:0">${i<stageIdx?'✓':(i+1)}</div>
+                ${i<stages.length-1?`<div class="onboarding-line ${i<stageIdx?'done':''}" style="flex:1;min-width:40px"></div>`:''}
               </div>`).join('')}
           </div>
-          <div style="display:flex;justify-content:space-between;margin-top:8px">
-            ${stageLabels.map(l=>`<span style="font-size:0.65rem;color:var(--muted);text-align:center;width:22px">${l.slice(0,3)}</span>`).join('<span style="width:20px"></span>')}
+          <div style="display:flex;justify-content:space-between;width:100%">
+            ${stageLabels.map(l=>`<span style="font-size:0.68rem;color:var(--muted);text-align:center;flex:1">${l}</span>`).join('')}
           </div>
         </div>
       </div>
@@ -377,22 +377,34 @@ function renderClientDetail(id) {
         </tr>`).join('')}</tbody></table>` : emptyState('📊','No reports yet','Send the first monthly report.')}
       </div>
 
-      <!-- INVOICES -->
+      <!-- ZOHO BILLING -->
       <div class="card mb-16">
         <div class="card-header">
-          <div class="card-title">Invoices (${clientInvoices.length})</div>
-          <button class="btn btn-ghost btn-sm" onclick="openAddInvoiceForClient('${c.id}')">+ Add Invoice</button>
+          <div class="card-title">Billing & Payment</div>
+          <div style="display:flex;gap:8px">
+            ${c.zohoUrl?`<a href="${c.zohoUrl}" target="_blank" class="btn btn-black btn-sm">Open Zoho Invoice ↗</a>`:'<button class="btn btn-ghost btn-sm" onclick="openEditClient(\''+c.id+'\')">Add Zoho URL</button>'}
+          </div>
         </div>
-        ${clientInvoices.length ? `<table><thead><tr><th>Type</th><th>Amount</th><th>Due</th><th>Status</th><th></th></tr></thead><tbody>${clientInvoices.slice().reverse().map(inv=>`<tr>
-          <td>${inv.type}</td>
-          <td class="td-mono">${fmtMoney(inv.amount)}</td>
-          <td class="td-mono">${fmtDate(inv.due)}</td>
-          <td>${payBadge(inv.status)}</td>
-          <td><div class="td-actions">
-            ${inv.status!=='Paid'?`<button class="btn btn-success btn-xs" onclick="markPaid('${inv.id}')">Paid</button>`:''}
-            ${inv.status!=='Paid'?`<button class="btn btn-amber btn-xs" onclick="sendInvoiceReminder('${inv.id}')">Remind</button>`:''}
-          </div></td>
-        </tr>`).join('')}</tbody></table>` : emptyState('💳','No invoices','Add the first invoice.')}
+        <div class="card-body">
+          <div class="detail-info-row">
+            <div class="detail-info-label">Monthly Fee</div>
+            <div class="detail-info-val td-mono">${fmtMoney(c.monthly)}/mo</div>
+          </div>
+          <div class="detail-info-row">
+            <div class="detail-info-label">Setup Fee</div>
+            <div class="detail-info-val td-mono">${fmtMoney(c.setup)}</div>
+          </div>
+          <div class="detail-info-row">
+            <div class="detail-info-label">Payment Status</div>
+            <div class="detail-info-val">${payBadge(c.payStatus||'Unpaid')}</div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:14px">
+            <button class="btn btn-success btn-sm" onclick="updatePayStatus('${c.id}','Paid')">Mark Paid</button>
+            <button class="btn btn-danger btn-sm" onclick="updatePayStatus('${c.id}','Overdue')">Mark Overdue</button>
+            <button class="btn btn-ghost btn-sm" onclick="updatePayStatus('${c.id}','Unpaid')">Reset</button>
+          </div>
+          ${!c.zohoUrl?`<div style="margin-top:12px;padding:10px 12px;background:var(--amber-light);border:1px solid var(--amber-mid);border-radius:var(--radius-sm);font-size:0.78rem;color:var(--amber)">No Zoho invoice URL added yet. Edit client to add it.</div>`:''}
+        </div>
       </div>
 
       <!-- COMMUNICATION LOG -->
@@ -463,6 +475,7 @@ function renderClientDetail(id) {
             ['Setup Fee', fmtMoney(c.setup)],
             ['Added', fmtDate(c.created)],
           ].map(([l,v])=>`<div class="detail-info-row"><div class="detail-info-label">${l}</div><div class="detail-info-val">${v}</div></div>`).join('')}
+          ${c.zohoUrl?`<div style="margin-top:12px"><a href="${c.zohoUrl}" target="_blank" class="btn btn-ghost w-full" style="justify-content:center">Open Zoho Invoice ↗</a></div>`:''}
           ${c.notes?`<div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:var(--radius-sm);font-size:0.82rem;color:var(--muted)">${c.notes}</div>`:''}
         </div>
       </div>
@@ -547,7 +560,7 @@ function openEditClient(id) {
 }
 
 function clearClientForm() {
-  ['c-name','c-owner','c-email','c-phone','c-website','c-notes','c-monthly','c-setup','c-pilot-date','c-next-invoice'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  ['c-name','c-owner','c-email','c-phone','c-website','c-notes','c-monthly','c-setup','c-pilot-date','c-next-invoice','c-zoho-url'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
   document.getElementById('c-market').value = 'Professional Services';
   document.getElementById('c-status').value = 'Pilot';
   document.getElementById('c-pay-status').value = 'Unpaid';
@@ -561,6 +574,7 @@ function fillClientForm(c) {
   set('c-name', c.name); set('c-owner', c.owner); set('c-email', c.email); set('c-phone', c.phone);
   set('c-website', c.website); set('c-notes', c.notes); set('c-monthly', c.monthly);
   set('c-setup', c.setup); set('c-pilot-date', c.pilotDate); set('c-next-invoice', c.nextInvoice);
+  set('c-zoho-url', c.zohoUrl);
   document.getElementById('c-market').value = c.market || 'Professional Services';
   document.getElementById('c-status').value = c.status || 'Pilot';
   document.getElementById('c-pay-status').value = c.payStatus || 'Unpaid';
@@ -589,6 +603,7 @@ function saveClient() {
     setup: document.getElementById('c-setup').value,
     notes: document.getElementById('c-notes').value.trim(),
     onboardingStage: document.getElementById('c-onboarding').value,
+    zohoUrl: document.getElementById('c-zoho-url')?.value.trim(),
     w1: document.getElementById('c-w1').checked,
     w2: document.getElementById('c-w2').checked,
     w3: document.getElementById('c-w3').checked,
@@ -711,93 +726,52 @@ function collectApiFields() {
 }
 
 // ─── INVOICES ───
+// ─── BILLING VIEW ───
 function renderBillingView() {
-  const paid = state.invoices.filter(i=>i.status==='Paid');
-  const unpaid = state.invoices.filter(i=>i.status!=='Paid');
-  const active = state.clients.filter(c=>c.status==='Active'||c.status==='Pilot');
-  const mrr = active.reduce((s,c)=>s+(parseFloat(c.monthly)||0),0);
-  const collected = paid.reduce((s,i)=>s+(parseFloat(i.amount)||0),0);
-  const outstanding = unpaid.reduce((s,i)=>s+(parseFloat(i.amount)||0),0);
-  const setup = state.invoices.filter(i=>i.type==='Setup').reduce((s,i)=>s+(parseFloat(i.amount)||0),0);
+  const active = state.clients.filter(c => c.status === 'Active' || c.status === 'Pilot');
+  const mrr = active.reduce((s,c) => s + (parseFloat(c.monthly)||0), 0);
+  const paid = active.filter(c => c.payStatus === 'Paid').length;
+  const unpaid = active.filter(c => c.payStatus !== 'Paid').length;
+
   setHTML('b-mrr', fmtMoney(mrr));
-  setHTML('b-collected', fmtMoney(collected));
-  setHTML('b-outstanding', fmtMoney(outstanding));
-  setHTML('b-setup', fmtMoney(setup));
+  setHTML('b-paid', paid);
+  setHTML('b-unpaid', unpaid);
 
   const el = document.getElementById('billing-table-body');
   if (!el) return;
-  if (!state.invoices.length) { setHTML('billing-table-wrap', emptyState('💳','No invoices yet','Add a client first then create invoices.')); return; }
-  const sorted = [...state.invoices].sort((a,b)=>new Date(b.date)-new Date(a.date));
-  el.innerHTML = sorted.map(inv => {
-    const c = state.clients.find(cl=>cl.id===inv.clientId);
+
+  if (!active.length) {
+    el.innerHTML = `<tr><td colspan="7">${emptyState('💳','No active clients yet','Add clients to track payment status.')}</td></tr>`;
+    return;
+  }
+
+  el.innerHTML = state.clients.map(c => {
+    const days = pilotDaysLeft(c);
+    const zohoBtn = c.zohoUrl
+      ? `<a href="${c.zohoUrl}" target="_blank" class="btn btn-ghost btn-xs">Open in Zoho ↗</a>`
+      : `<button class="btn btn-ghost btn-xs" onclick="openEditClient('${c.id}')">Add URL</button>`;
     return `<tr>
-      <td><div class="td-primary">${c?c.name:'Unknown'}</div></td>
-      <td><span class="text-small">${inv.type}</span></td>
-      <td class="td-mono">${fmtMoney(inv.amount)}</td>
-      <td class="td-mono">${fmtDate(inv.date)}</td>
-      <td class="td-mono">${fmtDate(inv.due)}</td>
-      <td>${payBadge(inv.status)}</td>
+      <td><div class="td-primary">${c.name}</div><div class="td-secondary">${c.email||''}</div></td>
+      <td><span class="text-small">${c.market||'—'}</span></td>
+      <td class="td-mono">${fmtMoney(c.monthly)}/mo</td>
+      <td>${payBadge(c.payStatus||'Unpaid')}</td>
+      <td>${c.status==='Pilot'&&days!==null?pilotCountdown(c):'<span class="text-muted text-small">—</span>'}</td>
+      <td>${zohoBtn}</td>
       <td><div class="td-actions">
-        ${inv.status!=='Paid'?`<button class="btn btn-success btn-xs" onclick="markPaid('${inv.id}')">Paid</button>`:''}
-        ${inv.status!=='Paid'?`<button class="btn btn-amber btn-xs" onclick="sendInvoiceReminder('${inv.id}')">Remind</button>`:''}
-        <button class="btn btn-danger btn-xs" onclick="deleteInvoice('${inv.id}')">✕</button>
+        <button class="btn btn-success btn-xs" onclick="updatePayStatus('${c.id}','Paid')">Paid</button>
+        <button class="btn btn-danger btn-xs" onclick="updatePayStatus('${c.id}','Overdue')">Overdue</button>
       </div></td>
     </tr>`;
   }).join('');
 }
 
-function openAddInvoice() {
-  state.editingInvoiceId = null;
-  const sel = document.getElementById('inv-client');
-  sel.innerHTML = state.clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
-  document.getElementById('inv-amount').value = '';
-  document.getElementById('inv-notes').value = '';
-  document.getElementById('inv-date').value = new Date().toISOString().split('T')[0];
-  document.getElementById('inv-due').value = '';
-  document.getElementById('inv-status').value = 'Unpaid';
-  document.getElementById('inv-type').value = 'Monthly';
-  openModal('modal-add-invoice');
-}
-
-function openAddInvoiceForClient(clientId) {
-  openAddInvoice();
-  document.getElementById('inv-client').value = clientId;
-  const c = state.clients.find(cl=>cl.id===clientId);
-  if (c) document.getElementById('inv-amount').value = c.monthly || '';
-}
-
-function saveInvoice() {
-  const clientId = document.getElementById('inv-client').value;
-  const amount = document.getElementById('inv-amount').value;
-  if (!clientId || !amount) { showToast('Client and amount required','error'); return; }
-  const inv = { id:uid(), clientId, type:document.getElementById('inv-type').value, amount, status:document.getElementById('inv-status').value, date:document.getElementById('inv-date').value, due:document.getElementById('inv-due').value, notes:document.getElementById('inv-notes').value, created:now() };
-  state.invoices.push(inv);
-  const c = state.clients.find(cl=>cl.id===clientId);
-  logActivity(clientId, `Invoice added — ${fmtMoney(amount)} ${inv.type}`, 'var(--amber)');
-  saveState(); closeModal('modal-add-invoice'); renderAll(); showToast('Invoice added','success');
-}
-
-function markPaid(id) {
-  const inv = state.invoices.find(i=>i.id===id);
-  if (!inv) return;
-  inv.status = 'Paid';
-  logActivity(inv.clientId, `Invoice marked paid — ${fmtMoney(inv.amount)}`, 'var(--green)');
-  saveState(); renderAll(); showToast('Marked as paid','success');
-}
-
-function deleteInvoice(id) {
-  if (!confirm('Delete this invoice?')) return;
-  state.invoices = state.invoices.filter(i=>i.id!==id);
-  saveState(); renderAll(); showToast('Invoice deleted','info');
-}
-
-function sendInvoiceReminder(invId) {
-  const inv = state.invoices.find(i=>i.id===invId);
-  if (!inv) return;
-  const c = state.clients.find(cl=>cl.id===inv.clientId);
-  logActivity(inv.clientId, `Invoice reminder sent — ${fmtMoney(inv.amount)} ${inv.type}`, 'var(--amber)');
+function updatePayStatus(clientId, status) {
+  const c = state.clients.find(cl => cl.id === clientId);
+  if (!c) return;
+  c.payStatus = status;
+  logActivity(clientId, `Payment status updated to ${status}`, status==='Paid'?'var(--green)':'var(--red)');
   saveState(); renderAll();
-  showToast(`Reminder sent to ${c?c.email:'client'}`,'info');
+  showToast(`${c.name} marked as ${status}`, status==='Paid'?'success':'error');
 }
 
 // ─── CONNECTION BOARD ───
