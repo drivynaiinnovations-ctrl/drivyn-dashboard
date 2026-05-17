@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Drivyn AI — Operations Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/dashboard.css">
+</head>
+<body>
+
+<!-- ─── SIDEBAR ─── -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="sidebar-logo-mark">Drivyn<span>AI</span></div>
+    <div class="sidebar-logo-sub">Operations Dashboard</div>
+  </div>
+  <nav class="nav">
+    <div class="sidebar-section-label">Main</div>
+    <button class="nav-item active" data-view="home" onclick="showView('home',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
+      Dashboard
+    </button>
+    <button class="nav-item" data-view="clients" onclick="showView('clients',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+      Clients
+      <span class="badge-count" id="nav-badge-clients" style="display:none"></span>
+    </button>
+    <button class="nav-item" data-view="billing" onclick="showView('billing',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+      Billing
+      <span class="badge-count" id="nav-badge-billing" style="display:none"></span>
+    </button>
+    <button class="nav-item" data-view="reports" onclick="showView('reports',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      Reports
+    </button>
+    <div class="nav-divider"></div>
+    <div class="sidebar-section-label">System</div>
+    <button class="nav-item" data-view="connections" onclick="showView('connections',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+      API Connections
+    </button>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="sidebar-footer-mrr-label">Monthly MRR</div>
+    <div class="sidebar-footer-mrr" id="sidebar-mrr">$0</div>
+    <div class="sidebar-footer-clients" id="sidebar-clients">0 active clients</div>
+  </div>
+</aside>
+
+<!-- ─── MAIN ─── -->
+<main class="main">
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-title" id="topbar-title">Dashboard</div>
+    </div>
+    <div class="topbar-right">
+      <button class="btn btn-ghost btn-sm" onclick="showView('reports',document.querySelector('[data-view=reports]'))">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+        Send Report
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="openAddInvoice()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+        Add Invoice
+      </button>
+      <button class="btn btn-primary btn-sm" onclick="openAddClient()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add Client
+      </button>
+    </div>
+  </div>
+
+  <div class="content">
+
+  <!-- ─── HOME VIEW ─── -->
+  <div class="view active" id="view-home">
+    <div class="page-header">
+      <div class="page-header-left">
+        <h2>Dashboard</h2>
+        <p>Overview of all clients, revenue, and system health</p>
+      </div>
+      <div class="page-header-right">
+        <button class="btn btn-primary btn-sm" onclick="openAddClient()">+ Add Client</button>
+      </div>
+    </div>
+
+    <div class="stats-grid stats-grid-4">
+      <div class="stat-card stat-card-accent">
+        <div class="stat-label">Monthly MRR</div>
+        <div class="stat-val stat-val-accent" id="stat-mrr">$0</div>
+        <div class="stat-sub" id="stat-mrr-sub">0 active clients</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Active Clients</div>
+        <div class="stat-val" id="stat-active">0</div>
+        <div class="stat-sub">active + pilot</div>
+      </div>
+      <div class="stat-card stat-card-red">
+        <div class="stat-label">Overdue Invoices</div>
+        <div class="stat-val stat-val-red" id="stat-overdue">0</div>
+        <div class="stat-sub" id="stat-overdue-sub">All clear</div>
+      </div>
+      <div class="stat-card stat-card-amber">
+        <div class="stat-label">Pilots Expiring</div>
+        <div class="stat-val stat-val-amber" id="stat-expiring">0</div>
+        <div class="stat-sub">this week</div>
+      </div>
+    </div>
+
+    <div class="stats-grid stats-grid-2" style="margin-bottom:22px">
+      <div class="stat-card stat-card-green">
+        <div class="stat-label">Total Revenue Recovered</div>
+        <div class="stat-val stat-val-green" id="stat-recovered">$0</div>
+        <div class="stat-sub">across all clients, all time</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Quick Actions</div>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="openAddClient()">+ Client</button>
+          <button class="btn btn-ghost btn-sm" onclick="openAddInvoice()">+ Invoice</button>
+          <button class="btn btn-ghost btn-sm" onclick="showView('reports',document.querySelector('[data-view=reports]'))">Send Report</button>
+          <button class="btn btn-ghost btn-sm" onclick="showView('connections',document.querySelector('[data-view=connections]'))">API Status</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="alert-grid" id="home-alerts"></div>
+
+    <div class="table-wrap">
+      <div class="table-header">
+        <h3>All Clients</h3>
+        <button class="btn btn-primary btn-sm" onclick="openAddClient()">+ Add Client</button>
+      </div>
+      <div id="home-clients"></div>
+    </div>
+  </div>
+
+  <!-- ─── CLIENTS VIEW ─── -->
+  <div class="view" id="view-clients">
+    <div class="page-header">
+      <div class="page-header-left">
+        <h2>Clients</h2>
+        <p>Manage all client accounts, wedges, and onboarding</p>
+      </div>
+      <div class="page-header-right">
+        <button class="btn btn-primary btn-sm" onclick="openAddClient()">+ Add Client</button>
+      </div>
+    </div>
+
+    <div class="stats-grid stats-grid-4">
+      <div class="stat-card"><div class="stat-label">Total</div><div class="stat-val" id="c-stat-total">0</div></div>
+      <div class="stat-card stat-card-green"><div class="stat-label">Active</div><div class="stat-val stat-val-green" id="c-stat-active">0</div></div>
+      <div class="stat-card stat-card-accent"><div class="stat-label">Pilot</div><div class="stat-val stat-val-accent" id="c-stat-pilot">0</div></div>
+      <div class="stat-card stat-card-red"><div class="stat-label">Churn Risk</div><div class="stat-val stat-val-red" id="c-stat-risk">0</div></div>
+    </div>
+
+    <div class="table-wrap" id="clients-table-wrap">
+      <div class="table-header">
+        <h3>Client Roster</h3>
+      </div>
+      <table>
+        <thead><tr>
+          <th>Company</th><th>Market</th><th>Wedges</th><th>Status</th>
+          <th>Pilot</th><th>Health</th><th>MRR</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="clients-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ─── CLIENT DETAIL VIEW ─── -->
+  <div class="view" id="view-detail"></div>
+
+  <!-- ─── BILLING VIEW ─── -->
+  <div class="view" id="view-billing">
+    <div class="page-header">
+      <div class="page-header-left">
+        <h2>Billing & Invoices</h2>
+        <p>Track all invoices, payments, and reminders</p>
+      </div>
+      <div class="page-header-right">
+        <button class="btn btn-primary btn-sm" onclick="openAddInvoice()">+ Add Invoice</button>
+      </div>
+    </div>
+
+    <div class="stats-grid stats-grid-4">
+      <div class="stat-card stat-card-accent"><div class="stat-label">Monthly MRR</div><div class="stat-val stat-val-accent" id="b-mrr">$0</div></div>
+      <div class="stat-card stat-card-green"><div class="stat-label">Total Collected</div><div class="stat-val stat-val-green" id="b-collected">$0</div></div>
+      <div class="stat-card stat-card-red"><div class="stat-label">Outstanding</div><div class="stat-val stat-val-red" id="b-outstanding">$0</div></div>
+      <div class="stat-card"><div class="stat-label">Setup Fees</div><div class="stat-val" id="b-setup">$0</div></div>
+    </div>
+
+    <div class="table-wrap" id="billing-table-wrap">
+      <div class="table-header"><h3>Invoices</h3></div>
+      <table>
+        <thead><tr>
+          <th>Client</th><th>Type</th><th>Amount</th><th>Invoice Date</th><th>Due Date</th><th>Status</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="billing-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ─── REPORTS VIEW ─── -->
+  <div class="view" id="view-reports">
+    <div class="page-header">
+      <div class="page-header-left">
+        <h2>Client Reports</h2>
+        <p>Build and send monthly performance reports per client</p>
+      </div>
+    </div>
+
+    <div class="grid-2 mb-22">
+      <div class="card">
+        <div class="card-header"><div class="card-title">Build Report</div></div>
+        <div class="card-body">
+          <div class="form-group">
+            <label class="form-label form-label-required">Select Client</label>
+            <select class="form-select" id="report-client-select"></select>
+          </div>
+
+          <div id="report-empty" style="padding:12px 0;color:var(--muted);font-size:0.82rem">Select a client above to fill in their monthly results.</div>
+
+          <div id="report-inputs" style="display:none">
+
+            <!-- W1 -->
+            <div id="rw1-section">
+              <div class="form-section-title" style="color:var(--accent)">⚡ Wedge 1 — Missed Lead Recovery</div>
+              <div class="form-row">
+                <div class="form-group"><label class="form-label">Leads responded to</label><input type="number" class="form-input" id="r-w1-leads" placeholder="0"></div>
+                <div class="form-group"><label class="form-label">Leads converted</label><input type="number" class="form-input" id="r-w1-converted" placeholder="0"></div>
+              </div>
+              <div class="form-row">
+                <div class="form-group"><label class="form-label">Avg response time</label><input type="text" class="form-input" id="r-w1-response" placeholder="90 sec"></div>
+                <div class="form-group"><label class="form-label">Revenue recovered ($)</label><input type="number" class="form-input" id="r-w1-revenue" placeholder="0"></div>
+              </div>
+            </div>
+
+            <!-- W2 -->
+            <div id="rw2-section">
+              <div class="form-section-title" style="color:var(--purple)">🔄 Wedge 2 — Dead Database</div>
+              <div class="form-row">
+                <div class="form-group"><label class="form-label">Contacts messaged</label><input type="number" class="form-input" id="r-w2-contacted" placeholder="0"></div>
+                <div class="form-group"><label class="form-label">Replies received</label><input type="number" class="form-input" id="r-w2-replies" placeholder="0"></div>
+              </div>
+              <div class="form-row">
+                <div class="form-group"><label class="form-label">Appointments booked</label><input type="number" class="form-input" id="r-w2-booked" placeholder="0"></div>
+                <div class="form-group"><label class="form-label">Reactivation rate (%)</label><input type="number" class="form-input" id="r-w2-rate" placeholder="0"></div>
+              </div>
+              <div class="form-group"><label class="form-label">Revenue from reactivation ($)</label><input type="number" class="form-input" id="r-w2-revenue" placeholder="0"></div>
+            </div>
+
+            <!-- W3 -->
+            <div id="rw3-section">
+              <div class="form-section-title" style="color:var(--green)">⭐ Wedge 3 — Review Gap</div>
+              <div class="form-row">
+                <div class="form-group"><label class="form-label">Requests sent</label><input type="number" class="form-input" id="r-w3-sent" placeholder="0"></div>
+                <div class="form-group"><label class="form-label">Reviews collected</label><input type="number" class="form-input" id="r-w3-collected" placeholder="0"></div>
+              </div>
+              <div class="form-row">
+                <div class="form-group"><label class="form-label">Avg star rating</label><input type="number" class="form-input" id="r-w3-stars" placeholder="4.8" step="0.1" max="5"></div>
+                <div class="form-group"><label class="form-label">Negatives intercepted</label><input type="number" class="form-input" id="r-w3-intercepted" placeholder="0"></div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Personal note (optional)</label>
+              <textarea class="form-textarea" id="r-note" placeholder="Add a message for this client..."></textarea>
+            </div>
+
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-primary" onclick="previewReport()">Preview Report</button>
+              <button class="btn btn-ghost" onclick="sendReport()">Send to Client</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Report history right panel -->
+      <div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Report History</div></div>
+          <div id="report-history"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── CONNECTIONS VIEW ─── -->
+  <div class="view" id="view-connections">
+    <div class="page-header">
+      <div class="page-header-left">
+        <h2>API Connections</h2>
+        <p>See which clients have all credentials configured and which need attention</p>
+      </div>
+      <div class="page-header-right">
+        <button class="btn btn-ghost btn-sm" onclick="renderConnectionBoard()">↻ Refresh</button>
+      </div>
+    </div>
+    <div class="connection-grid" id="connection-grid"></div>
+  </div>
+
+  </div><!-- end .content -->
+</main>
+
+<!-- ─── ADD / EDIT CLIENT MODAL ─── -->
+<div class="modal-overlay" id="modal-add-client">
+  <div class="modal modal-lg">
+    <div class="modal-head">
+      <h3 id="modal-client-title">Add New Client</h3>
+      <button class="modal-close" onclick="closeModal('modal-add-client')">✕</button>
+    </div>
+
+    <div class="modal-tabs">
+      <div class="modal-tab active" onclick="switchModalTab(this,'tab-info')">Company Info</div>
+      <div class="modal-tab" onclick="switchModalTab(this,'tab-wedges')">Services & APIs</div>
+      <div class="modal-tab" onclick="switchModalTab(this,'tab-billing')">Billing</div>
+    </div>
+
+    <div class="modal-body">
+
+      <!-- TAB: INFO -->
+      <div class="modal-tab-panel active" id="tab-info">
+        <div class="form-section">
+          <div class="form-section-title">Company Details</div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label form-label-required">Business Name</label><input type="text" class="form-input" id="c-name" placeholder="Acme Law Firm"></div>
+            <div class="form-group"><label class="form-label">Owner Name</label><input type="text" class="form-input" id="c-owner" placeholder="Jane Smith"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Email</label><input type="email" class="form-input" id="c-email" placeholder="jane@acmelaw.com"></div>
+            <div class="form-group"><label class="form-label">Phone</label><input type="tel" class="form-input" id="c-phone" placeholder="(443) 555-0100"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Market</label>
+              <select class="form-select" id="c-market">
+                <option>Professional Services</option>
+                <option>Health & Wellness</option>
+                <option>Home & Trade</option>
+              </select>
+            </div>
+            <div class="form-group"><label class="form-label">Website</label><input type="text" class="form-input" id="c-website" placeholder="www.acmelaw.com"></div>
+          </div>
+        </div>
+        <div class="form-section">
+          <div class="form-section-title">Status & Onboarding</div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Client Status</label>
+              <select class="form-select" id="c-status">
+                <option value="Pilot">Pilot</option>
+                <option value="Active">Active</option>
+                <option value="Paused">Paused</option>
+                <option value="Churned">Churned</option>
+              </select>
+            </div>
+            <div class="form-group"><label class="form-label">Onboarding Stage</label>
+              <select class="form-select" id="c-onboarding">
+                <option value="kickoff">Kickoff</option>
+                <option value="build">Build</option>
+                <option value="approval">Approval</option>
+                <option value="live">Live</option>
+                <option value="optimized">Optimized</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Pilot Start Date</label><input type="date" class="form-input" id="c-pilot-date"></div>
+            <div class="form-group"><label class="form-label">Next Invoice Date</label><input type="date" class="form-input" id="c-next-invoice"></div>
+          </div>
+        </div>
+        <div class="form-section">
+          <div class="form-section-title">Notes</div>
+          <div class="form-group"><textarea class="form-textarea" id="c-notes" placeholder="Client notes, special requirements, referral source..."></textarea></div>
+        </div>
+      </div>
+
+      <!-- TAB: WEDGES & APIs -->
+      <div class="modal-tab-panel" id="tab-wedges">
+        <div class="form-section-title" style="margin-bottom:14px">Select active wedges and enter API credentials for each tool</div>
+
+        <!-- WEDGE 1 -->
+        <div class="wedge-card">
+          <div class="wedge-card-header" onclick="toggleWedgeCard('w1-body',this)">
+            <div class="wedge-card-left">
+              <div class="wedge-card-icon wedge-icon-w1">⚡</div>
+              <div>
+                <div class="wedge-card-name">Wedge 1 — Missed Lead Recovery</div>
+                <div class="wedge-card-desc">VAPI · GoHighLevel · Make.com · Calendly</div>
+              </div>
+            </div>
+            <div class="wedge-card-right">
+              <label class="form-toggle" onclick="event.stopPropagation()">
+                <input type="checkbox" id="c-w1" onchange="renderApiFields()">
+                <span class="form-toggle-label" style="font-size:0.78rem">Active</span>
+              </label>
+              <span style="color:var(--muted);font-size:0.8rem">▾</span>
+            </div>
+          </div>
+          <div class="wedge-card-body" id="w1-body">
+            <div id="api-body-w1"></div>
+            <div class="text-muted text-small" style="margin-top:4px">Enable the wedge above to configure API credentials</div>
+          </div>
+        </div>
+
+        <!-- WEDGE 2 -->
+        <div class="wedge-card">
+          <div class="wedge-card-header" onclick="toggleWedgeCard('w2-body',this)">
+            <div class="wedge-card-left">
+              <div class="wedge-card-icon wedge-icon-w2">🔄</div>
+              <div>
+                <div class="wedge-card-name">Wedge 2 — Dead Database Reactivation</div>
+                <div class="wedge-card-desc">GoHighLevel · Make.com · Twilio · NeverBounce · Mailgun</div>
+              </div>
+            </div>
+            <div class="wedge-card-right">
+              <label class="form-toggle" onclick="event.stopPropagation()">
+                <input type="checkbox" id="c-w2" onchange="renderApiFields()">
+                <span class="form-toggle-label" style="font-size:0.78rem">Active</span>
+              </label>
+              <span style="color:var(--muted);font-size:0.8rem">▾</span>
+            </div>
+          </div>
+          <div class="wedge-card-body" id="w2-body">
+            <div id="api-body-w2"></div>
+            <div class="text-muted text-small">Enable the wedge above to configure API credentials</div>
+          </div>
+        </div>
+
+        <!-- WEDGE 3 -->
+        <div class="wedge-card">
+          <div class="wedge-card-header" onclick="toggleWedgeCard('w3-body',this)">
+            <div class="wedge-card-left">
+              <div class="wedge-card-icon wedge-icon-w3">⭐</div>
+              <div>
+                <div class="wedge-card-name">Wedge 3 — Review Gap System</div>
+                <div class="wedge-card-desc">GoHighLevel · Make.com · Twilio · NiceJob / Birdeye</div>
+              </div>
+            </div>
+            <div class="wedge-card-right">
+              <label class="form-toggle" onclick="event.stopPropagation()">
+                <input type="checkbox" id="c-w3" onchange="renderApiFields()">
+                <span class="form-toggle-label" style="font-size:0.78rem">Active</span>
+              </label>
+              <span style="color:var(--muted);font-size:0.8rem">▾</span>
+            </div>
+          </div>
+          <div class="wedge-card-body" id="w3-body">
+            <div id="api-body-w3"></div>
+            <div class="text-muted text-small">Enable the wedge above to configure API credentials</div>
+          </div>
+        </div>
+
+        <div style="margin-top:14px;padding:12px 14px;background:var(--surface2);border-radius:var(--radius-sm);font-size:0.75rem;color:var(--muted)">
+          🔒 API keys are masked on screen and stored locally in your browser. When you connect to Airtable or Supabase, they will be encrypted server-side.
+        </div>
+      </div>
+
+      <!-- TAB: BILLING -->
+      <div class="modal-tab-panel" id="tab-billing">
+        <div class="form-section">
+          <div class="form-section-title">Fee Structure</div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Monthly Fee ($)</label><input type="number" class="form-input" id="c-monthly" placeholder="1000"></div>
+            <div class="form-group"><label class="form-label">Setup Fee ($)</label><input type="number" class="form-input" id="c-setup" placeholder="500"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Payment Status</label>
+              <select class="form-select" id="c-pay-status">
+                <option value="Unpaid">Unpaid</option>
+                <option value="Paid">Paid</option>
+                <option value="Overdue">Overdue</option>
+              </select>
+            </div>
+            <div class="form-group"><label class="form-label">Next Invoice Date</label><input type="date" class="form-input" id="c-next-invoice-2"></div>
+          </div>
+        </div>
+        <div style="padding:14px;background:var(--accent-light);border:1px solid var(--accent-mid);border-radius:var(--radius-sm);font-size:0.82rem">
+          <strong>Standard pricing:</strong> $1,000/month · $500 setup · No contract · 30-day pilot at $500
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('modal-add-client')">Cancel</button>
+      <button class="btn btn-danger btn-sm" id="btn-delete-client" style="display:none;margin-right:auto" onclick="deleteClientFromModal()">Delete Client</button>
+      <button class="btn btn-primary" onclick="saveClient()">Save Client</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── ADD INVOICE MODAL ─── -->
+<div class="modal-overlay" id="modal-add-invoice">
+  <div class="modal modal-sm">
+    <div class="modal-head">
+      <h3>Add Invoice</h3>
+      <button class="modal-close" onclick="closeModal('modal-add-invoice')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label form-label-required">Client</label>
+        <select class="form-select" id="inv-client"></select>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Invoice Type</label>
+          <select class="form-select" id="inv-type">
+            <option value="Monthly">Monthly Retainer</option>
+            <option value="Setup">Setup Fee</option>
+            <option value="Pilot">Pilot Fee</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label form-label-required">Amount ($)</label>
+          <input type="number" class="form-input" id="inv-amount" placeholder="1000">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Invoice Date</label><input type="date" class="form-input" id="inv-date"></div>
+        <div class="form-group"><label class="form-label">Due Date</label><input type="date" class="form-input" id="inv-due"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Status</label>
+          <select class="form-select" id="inv-status">
+            <option value="Unpaid">Unpaid</option>
+            <option value="Paid">Paid</option>
+            <option value="Overdue">Overdue</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Notes</label><input type="text" class="form-input" id="inv-notes" placeholder="e.g. Month 1 pilot"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('modal-add-invoice')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveInvoice()">Save Invoice</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── REPORT PREVIEW MODAL ─── -->
+<div class="modal-overlay" id="modal-report-preview">
+  <div class="modal modal-lg">
+    <div class="modal-head">
+      <h3>Report Preview</h3>
+      <button class="modal-close" onclick="closeModal('modal-report-preview')">✕</button>
+    </div>
+    <div class="modal-body" id="report-preview-body"></div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('modal-report-preview')">Close</button>
+      <button class="btn btn-primary" onclick="sendReport()">Send to Client</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── ADD WIN MODAL ─── -->
+<div class="modal-overlay" id="modal-add-win">
+  <div class="modal modal-sm">
+    <div class="modal-head">
+      <h3>Record Quick Win</h3>
+      <button class="modal-close" onclick="closeModal('modal-add-win')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="win-client-id">
+      <div class="form-group">
+        <label class="form-label">Win Description</label>
+        <textarea class="form-textarea" id="win-text" placeholder="e.g. Booked 11 reactivations in week 1 · 47 new reviews in 30 days · Spring calendar 80% booked"></textarea>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('modal-add-win')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveWin()">Save Win</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── ADD COMM LOG MODAL ─── -->
+<div class="modal-overlay" id="modal-add-comm">
+  <div class="modal modal-sm">
+    <div class="modal-head">
+      <h3>Log Communication</h3>
+      <button class="modal-close" onclick="closeModal('modal-add-comm')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="comm-client-id">
+      <div class="form-group"><label class="form-label">Type</label>
+        <select class="form-select" id="comm-type">
+          <option>Call</option>
+          <option>Email</option>
+          <option>Text</option>
+          <option>Meeting</option>
+          <option>Note</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Notes</label>
+        <textarea class="form-textarea" id="comm-note" placeholder="What was discussed, decided, or noted..."></textarea>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('modal-add-comm')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveComm()">Save Note</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── TOAST ─── -->
+<div class="toast" id="toast">
+  <div class="toast-dot"></div>
+  <span id="toast-msg"></span>
+</div>
+
+<script src="assets/js/dashboard.js"></script>
+<script>
+// Modal tab switching
+function switchModalTab(btn, panelId) {
+  btn.closest('.modal').querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
+  btn.closest('.modal').querySelectorAll('.modal-tab-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(panelId).classList.add('active');
+}
+
+// Toggle wedge card body
+function toggleWedgeCard(bodyId, header) {
+  const body = document.getElementById(bodyId);
+  body.classList.toggle('open');
+  header.classList.toggle('active');
+}
+
+// Delete client from modal
+function deleteClientFromModal() {
+  if (state.editingClientId) deleteClient(state.editingClientId);
+  closeModal('modal-add-client');
+}
+
+// Show delete button when editing
+const origOpenEditClient = openEditClient;
+function openEditClient(id) {
+  origOpenEditClient(id);
+  document.getElementById('btn-delete-client').style.display = 'inline-flex';
+}
+
+const origOpenAddClient = openAddClient;
+function openAddClient() {
+  origOpenAddClient();
+  document.getElementById('btn-delete-client').style.display = 'none';
+}
+
+// Close modals on overlay click
+document.querySelectorAll('.modal-overlay').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+});
+</script>
+</body>
+</html>
