@@ -629,18 +629,20 @@ function deleteClientFromModal() {
   closeModal('modal-add-client');
 }
 
-// Show delete button when editing
-const origOpenEditClient = openEditClient;
-function openEditClient(id) {
-  origOpenEditClient(id);
-  document.getElementById('btn-delete-client').style.display = 'inline-flex';
-}
+// Show/hide delete button based on add vs edit mode
+document.addEventListener('DOMContentLoaded', () => {
+  const origOpenEditClient = window.openEditClient;
+  window.openEditClient = function(id) {
+    origOpenEditClient(id);
+    document.getElementById('btn-delete-client').style.display = 'inline-flex';
+  };
 
-const origOpenAddClient = openAddClient;
-function openAddClient() {
-  origOpenAddClient();
-  document.getElementById('btn-delete-client').style.display = 'none';
-}
+  const origOpenAddClient = window.openAddClient;
+  window.openAddClient = function() {
+    origOpenAddClient();
+    document.getElementById('btn-delete-client').style.display = 'none';
+  };
+});
 
 // Close modals on overlay click
 document.querySelectorAll('.modal-overlay').forEach(m => {
