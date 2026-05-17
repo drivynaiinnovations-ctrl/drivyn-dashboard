@@ -36,6 +36,24 @@
       Reports
     </button>
     <div class="nav-divider"></div>
+    <div class="sidebar-section-label">Intelligence</div>
+    <button class="nav-item" data-view="results" onclick="showView('results',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>
+      Results Board
+    </button>
+    <button class="nav-item" data-view="voice" onclick="showView('voice',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.8a19.79 19.79 0 01-3.07-8.67A2 2 0 012 1h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 8.72a16 16 0 005.37 5.37l1.78-1.34a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+      Voice Intel
+    </button>
+    <button class="nav-item" data-view="reviews" onclick="showView('reviews',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg>
+      Review Intel
+    </button>
+    <button class="nav-item" data-view="winback" onclick="showView('winback',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17,1 21,5 17,9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7,23 3,19 7,15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
+      Win-Back Lab
+    </button>
+    <div class="nav-divider"></div>
     <div class="sidebar-section-label">System</div>
     <button class="nav-item" data-view="connections" onclick="showView('connections',this)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
@@ -285,7 +303,133 @@
     </div>
   </div>
 
-  <!-- ─── CONNECTIONS VIEW ─── -->
+  <!-- ─── RESULTS BOARD ─── -->
+  <div class="view" id="view-results">
+    <div class="page-header">
+      <div class="page-header-left">
+        <h2>Results Board</h2>
+        <p>All clients. All metrics. One screen. Click any row for full detail.</p>
+      </div>
+    </div>
+    <div class="stats-grid stats-grid-4" style="margin-bottom:22px">
+      <div class="stat-card stat-card-green"><div class="stat-label">Total Revenue Recovered</div><div class="stat-val stat-val-green" id="rb-revenue">$0</div><div class="stat-sub">across all clients</div></div>
+      <div class="stat-card stat-card-accent"><div class="stat-label">Total Reviews Generated</div><div class="stat-val stat-val-accent" id="rb-reviews">0</div><div class="stat-sub">by Drivyn AI</div></div>
+      <div class="stat-card"><div class="stat-label">Avg Drivyn Score Lift</div><div class="stat-val" id="rb-score-lift">+0.0 ⭐</div><div class="stat-sub">Google rating improvement</div></div>
+      <div class="stat-card"><div class="stat-label">Total Leads Recovered</div><div class="stat-val" id="rb-leads">0</div><div class="stat-sub">across all clients</div></div>
+    </div>
+    <div class="table-wrap">
+      <div class="table-header"><h3>Per Client Performance</h3></div>
+      <table>
+        <thead><tr>
+          <th>Client</th><th>Vertical</th>
+          <th>Drivyn Score</th><th>W1 Leads</th>
+          <th>W1 Revenue</th><th>W2 Rate</th>
+          <th>W3 Reviews</th><th>Health</th><th></th>
+        </tr></thead>
+        <tbody id="results-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ─── VOICE INTELLIGENCE ─── -->
+  <div class="view" id="view-voice">
+    <div class="page-header">
+      <div class="page-header-left">
+        <h2>Voice Intelligence</h2>
+        <p>Call volume, outcomes, transcripts, and follow-up tracking per client</p>
+      </div>
+      <div class="page-header-right">
+        <button class="btn btn-primary btn-sm" onclick="openAddCall()">+ Log Call</button>
+      </div>
+    </div>
+    <div class="stats-grid stats-grid-4">
+      <div class="stat-card"><div class="stat-label">Total Calls This Month</div><div class="stat-val" id="v-total">0</div></div>
+      <div class="stat-card stat-card-green"><div class="stat-label">Booked from Calls</div><div class="stat-val stat-val-green" id="v-booked">0</div></div>
+      <div class="stat-card stat-card-amber"><div class="stat-label">Unbooked — Follow-Up Sent</div><div class="stat-val stat-val-amber" id="v-followup">0</div></div>
+      <div class="stat-card stat-card-red"><div class="stat-label">Needs Follow-Up</div><div class="stat-val stat-val-red" id="v-needs">0</div></div>
+    </div>
+    <div class="table-wrap">
+      <div class="table-header">
+        <h3>Call Log</h3>
+        <select class="form-select" id="voice-client-filter" style="width:200px;font-size:0.82rem" onchange="renderVoiceLog()">
+          <option value="">All Clients</option>
+        </select>
+      </div>
+      <div id="voice-log-body"></div>
+    </div>
+  </div>
+
+  <!-- ─── REVIEW INTELLIGENCE ─── -->
+  <div class="view" id="view-reviews">
+    <div class="page-header">
+      <div class="page-header-left">
+        <h2>Review Intelligence</h2>
+        <p>Drivyn Score tracking, sentiment analysis, and review trends per client</p>
+      </div>
+    </div>
+    <div class="stats-grid stats-grid-3">
+      <div class="stat-card stat-card-green"><div class="stat-label">Total Reviews Generated</div><div class="stat-val stat-val-green" id="ri-total">0</div></div>
+      <div class="stat-card"><div class="stat-label">Avg Score Improvement</div><div class="stat-val" id="ri-avg-lift">+0.0 ⭐</div></div>
+      <div class="stat-card stat-card-red"><div class="stat-label">Negatives Intercepted</div><div class="stat-val stat-val-red" id="ri-intercepted">0</div></div>
+    </div>
+    <div class="table-wrap">
+      <div class="table-header"><h3>Drivyn Score — All Clients</h3></div>
+      <table>
+        <thead><tr>
+          <th>Client</th><th>Vertical</th>
+          <th>Before Drivyn</th><th>After Drivyn</th>
+          <th>Score Lift</th><th>Reviews Before</th>
+          <th>Reviews Now</th><th>New Reviews</th>
+        </tr></thead>
+        <tbody id="review-score-body"></tbody>
+      </table>
+    </div>
+    <div style="margin-top:20px" class="table-wrap">
+      <div class="table-header"><h3>Review Sentiment Analysis</h3><span style="font-size:0.75rem;color:var(--muted)">Paste reviews to analyze</span></div>
+      <div style="padding:20px">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Select Client</label>
+            <select class="form-select" id="ri-client-select"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Vertical Category</label>
+            <select class="form-select" id="ri-category">
+              <option value="">Auto-detect from vertical</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Paste Review Text</label>
+          <textarea class="form-textarea" id="ri-review-text" placeholder="Paste the review text here — Claude AI will analyze sentiment, extract what's working, and flag what needs fixing..." style="min-height:100px"></textarea>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary" onclick="analyzeReview()">Analyze with AI</button>
+          <button class="btn btn-ghost" onclick="clearReviewAnalysis()">Clear</button>
+        </div>
+        <div id="review-analysis-result" style="margin-top:16px;display:none"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── WIN-BACK LAB ─── -->
+  <div class="view" id="view-winback">
+    <div class="page-header">
+      <div class="page-header-left">
+        <h2>Win-Back Lab</h2>
+        <p>A/B test reactivation strategies per client. Find the winner. Scale it.</p>
+      </div>
+      <div class="page-header-right">
+        <button class="btn btn-primary btn-sm" onclick="openAddCampaign()">+ New Campaign</button>
+      </div>
+    </div>
+    <div class="stats-grid stats-grid-3">
+      <div class="stat-card"><div class="stat-label">Active Campaigns</div><div class="stat-val" id="wb-active">0</div></div>
+      <div class="stat-card stat-card-green"><div class="stat-label">Best Performing Strategy</div><div class="stat-val stat-val-green" style="font-size:1rem;margin-top:6px" id="wb-best">—</div></div>
+      <div class="stat-card stat-card-accent"><div class="stat-label">Avg Reactivation Rate</div><div class="stat-val stat-val-accent" id="wb-avg-rate">0%</div></div>
+    </div>
+    <div id="winback-campaigns"></div>
+  </div>
   <div class="view" id="view-connections">
     <div class="page-header">
       <div class="page-header-left">
@@ -368,8 +512,68 @@
           </div>
         </div>
         <div class="form-section">
+          <div class="form-section-title">Drivyn Score — Google Rating Tracker</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Google Rating BEFORE Drivyn</label>
+              <input type="number" class="form-input" id="c-score-before" placeholder="3.2" step="0.1" min="1" max="5">
+              <div class="form-hint">Record on Day 1. Cannot be recovered later.</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Review Count BEFORE Drivyn</label>
+              <input type="number" class="form-input" id="c-reviews-before" placeholder="22">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Current Google Rating</label>
+              <input type="number" class="form-input" id="c-score-current" placeholder="4.2" step="0.1" min="1" max="5">
+              <div class="form-hint">Update monthly when sending report.</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Current Review Count</label>
+              <input type="number" class="form-input" id="c-reviews-current" placeholder="69">
+            </div>
+          </div>
+        </div>
+        <div class="form-section">
+          <div class="form-section-title">Vertical-Specific Details</div>
+          <div class="form-group">
+            <label class="form-label">Sub-Industry</label>
+            <input type="text" class="form-input" id="c-subindustry" placeholder="e.g. Estate Planning, Med Spa, HVAC">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Primary Services Offered</label>
+              <textarea class="form-textarea" id="c-services" placeholder="List main services, treatments, or practice areas..." style="min-height:60px"></textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Service Area / Location</label>
+              <input type="text" class="form-input" id="c-service-area" placeholder="e.g. Atlanta GA, Dallas TX">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Avg Job / Appointment Value ($)</label>
+              <input type="number" class="form-input" id="c-avg-value" placeholder="1200">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Qualification Required?</label>
+              <select class="form-select" id="c-qualify">
+                <option value="no">No — book immediately</option>
+                <option value="yes">Yes — qualify first (Professional)</option>
+                <option value="light">Light — capture interest only</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Emergency / Urgent Line Number</label>
+            <input type="tel" class="form-input" id="c-emergency-line" placeholder="For after-hours routing (Trade especially)">
+          </div>
+        </div>
+        <div class="form-section">
           <div class="form-section-title">Notes</div>
-          <div class="form-group"><textarea class="form-textarea" id="c-notes" placeholder="Client notes, special requirements, referral source..."></textarea></div>
+          <div class="form-group"><textarea class="form-textarea" id="c-notes" placeholder="Client notes, special requirements, referral source, compliance notes..."></textarea></div>
         </div>
       </div>
 
@@ -603,7 +807,181 @@
   </div>
 </div>
 
-<!-- ─── TOAST ─── -->
+<!-- ─── LOG CALL MODAL ─── -->
+<div class="modal-overlay" id="modal-add-call">
+  <div class="modal modal-lg">
+    <div class="modal-head">
+      <h3>Log Call</h3>
+      <button class="modal-close" onclick="closeModal('modal-add-call')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label form-label-required">Client</label>
+          <select class="form-select" id="call-client"></select>
+        </div>
+        <div class="form-group"><label class="form-label">Call Date & Time</label>
+          <input type="datetime-local" class="form-input" id="call-datetime">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Caller Number</label>
+          <input type="tel" class="form-input" id="call-number" placeholder="+14435550100">
+        </div>
+        <div class="form-group"><label class="form-label">Duration</label>
+          <input type="text" class="form-input" id="call-duration" placeholder="2m 14s">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Call Outcome</label>
+          <select class="form-select" id="call-outcome">
+            <option value="qualified">Qualified — booked</option>
+            <option value="interested">Interested — did not book</option>
+            <option value="voicemail">Voicemail left</option>
+            <option value="callback">Callback requested</option>
+            <option value="not-qualified">Not qualified</option>
+            <option value="wrong-number">Wrong number</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Booked?</label>
+          <select class="form-select" id="call-booked">
+            <option value="yes">Yes — booked</option>
+            <option value="no">No — not booked</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">What Did They Ask About? (Service Interest)</label>
+        <input type="text" class="form-input" id="call-interest" placeholder="e.g. Botox consultation, HVAC repair, Estate planning">
+      </div>
+      <div class="form-group"><label class="form-label">Any Objections Raised?</label>
+        <input type="text" class="form-input" id="call-objection" placeholder="e.g. Price concern, wanted to think about it, timing">
+      </div>
+      <div class="form-group"><label class="form-label">Call Transcript (paste from VAPI)</label>
+        <textarea class="form-textarea" id="call-transcript" placeholder="Paste the VAPI transcript here. AI will analyze it to suggest the best follow-up offer." style="min-height:120px"></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Follow-Up Sent?</label>
+          <select class="form-select" id="call-followup-sent">
+            <option value="no">Not yet</option>
+            <option value="yes">Yes — sent</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Follow-Up Offer Used</label>
+          <select class="form-select" id="call-offer">
+            <option value="">— Select offer —</option>
+            <option value="A">Offer A — Discount / Special</option>
+            <option value="B">Offer B — Urgency / Availability</option>
+            <option value="C">Offer C — Social Proof</option>
+            <option value="D">Offer D — Free Consult / Estimate</option>
+            <option value="E">Offer E — Personal Check-In</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Follow-Up Result</label>
+        <select class="form-select" id="call-followup-result">
+          <option value="pending">Pending</option>
+          <option value="booked">Booked after follow-up</option>
+          <option value="no-response">No response</option>
+          <option value="not-interested">Not interested</option>
+        </select>
+      </div>
+      <div style="margin-top:12px;padding:12px 14px;background:var(--accent-light);border:1px solid var(--accent-mid);border-radius:var(--radius-sm);font-size:0.78rem;color:var(--accent)">
+        💡 After saving — go to Review Intel to paste the transcript and get an AI-suggested follow-up offer.
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('modal-add-call')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCall()">Save Call</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── ADD CAMPAIGN MODAL ─── -->
+<div class="modal-overlay" id="modal-add-campaign">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>New Win-Back Campaign</h3>
+      <button class="modal-close" onclick="closeModal('modal-add-campaign')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label form-label-required">Client</label>
+          <select class="form-select" id="camp-client"></select>
+        </div>
+        <div class="form-group"><label class="form-label">Campaign Name</label>
+          <input type="text" class="form-input" id="camp-name" placeholder="e.g. Spring Reactivation A">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Strategy Type</label>
+          <select class="form-select" id="camp-strategy">
+            <optgroup label="Professional Services">
+              <option value="matter-update">Matter Update</option>
+              <option value="referral-ask-pro">Referral Ask</option>
+              <option value="industry-update">Industry/Legal Update</option>
+              <option value="annual-checkin">Annual Check-In</option>
+            </optgroup>
+            <optgroup label="Health & Wellness">
+              <option value="lapsed-reminder">Lapsed Visit Reminder</option>
+              <option value="seasonal-offer-health">Seasonal Offer</option>
+              <option value="new-treatment">New Treatment</option>
+              <option value="birthday">Birthday / Milestone</option>
+              <option value="results-checkin">Results Check-In</option>
+            </optgroup>
+            <optgroup label="Home & Trade">
+              <option value="seasonal-maintenance">Seasonal Maintenance</option>
+              <option value="area-visit">Area Visit</option>
+              <option value="annual-service">Annual Check-In</option>
+              <option value="new-service-trade">New Service</option>
+              <option value="preseason">Pre-Season Booking</option>
+            </optgroup>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">A/B Test Variant</label>
+          <select class="form-select" id="camp-variant">
+            <option value="A">Offer A</option>
+            <option value="B">Offer B</option>
+            <option value="control">Control (no offer)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Message Sent</label>
+        <textarea class="form-textarea" id="camp-message" placeholder="Paste the actual message used in this campaign..."></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Contacts Sent To</label>
+          <input type="number" class="form-input" id="camp-sent" placeholder="0">
+        </div>
+        <div class="form-group"><label class="form-label">Replies Received</label>
+          <input type="number" class="form-input" id="camp-replies" placeholder="0">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Bookings from Campaign</label>
+          <input type="number" class="form-input" id="camp-booked" placeholder="0">
+        </div>
+        <div class="form-group"><label class="form-label">Revenue Generated ($)</label>
+          <input type="number" class="form-input" id="camp-revenue" placeholder="0">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Launch Date</label>
+          <input type="date" class="form-input" id="camp-date">
+        </div>
+        <div class="form-group"><label class="form-label">Status</label>
+          <select class="form-select" id="camp-status">
+            <option value="active">Active</option>
+            <option value="complete">Complete</option>
+            <option value="paused">Paused</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('modal-add-campaign')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCampaign()">Save Campaign</button>
+    </div>
+  </div>
+</div>
 <div class="toast" id="toast">
   <div class="toast-dot"></div>
   <span id="toast-msg"></span>

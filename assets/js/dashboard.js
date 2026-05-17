@@ -9,6 +9,8 @@ let state = {
   wins: [],
   comms: [],
   referrals: [],
+  calls: [],
+  campaigns: [],
   currentView: 'home',
   currentClientId: null,
   editingClientId: null,
@@ -33,6 +35,8 @@ function saveState() {
       wins: state.wins,
       comms: state.comms,
       referrals: state.referrals,
+      calls: state.calls,
+      campaigns: state.campaigns,
     }));
   } catch(e) { console.warn('State save failed', e); }
 }
@@ -560,7 +564,7 @@ function openEditClient(id) {
 }
 
 function clearClientForm() {
-  ['c-name','c-owner','c-email','c-phone','c-website','c-notes','c-monthly','c-setup','c-pilot-date','c-next-invoice','c-zoho-url'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  ['c-name','c-owner','c-email','c-phone','c-website','c-notes','c-monthly','c-setup','c-pilot-date','c-next-invoice','c-zoho-url','c-score-before','c-reviews-before','c-score-current','c-reviews-current','c-subindustry','c-services','c-service-area','c-avg-value','c-emergency-line'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
   document.getElementById('c-market').value = 'Professional Services';
   document.getElementById('c-status').value = 'Pilot';
   document.getElementById('c-pay-status').value = 'Unpaid';
@@ -575,6 +579,12 @@ function fillClientForm(c) {
   set('c-website', c.website); set('c-notes', c.notes); set('c-monthly', c.monthly);
   set('c-setup', c.setup); set('c-pilot-date', c.pilotDate); set('c-next-invoice', c.nextInvoice);
   set('c-zoho-url', c.zohoUrl);
+  set('c-score-before', c.scoreBefore); set('c-reviews-before', c.reviewsBefore);
+  set('c-score-current', c.scoreCurrent); set('c-reviews-current', c.reviewsCurrent);
+  set('c-subindustry', c.subindustry); set('c-services', c.services);
+  set('c-service-area', c.serviceArea); set('c-avg-value', c.avgValue);
+  set('c-emergency-line', c.emergencyLine);
+  document.getElementById('c-qualify').value = c.qualify || 'no';
   document.getElementById('c-market').value = c.market || 'Professional Services';
   document.getElementById('c-status').value = c.status || 'Pilot';
   document.getElementById('c-pay-status').value = c.payStatus || 'Unpaid';
@@ -604,6 +614,16 @@ function saveClient() {
     notes: document.getElementById('c-notes').value.trim(),
     onboardingStage: document.getElementById('c-onboarding').value,
     zohoUrl: document.getElementById('c-zoho-url')?.value.trim(),
+    scoreBefore: document.getElementById('c-score-before')?.value,
+    reviewsBefore: document.getElementById('c-reviews-before')?.value,
+    scoreCurrent: document.getElementById('c-score-current')?.value,
+    reviewsCurrent: document.getElementById('c-reviews-current')?.value,
+    subindustry: document.getElementById('c-subindustry')?.value.trim(),
+    services: document.getElementById('c-services')?.value.trim(),
+    serviceArea: document.getElementById('c-service-area')?.value.trim(),
+    avgValue: document.getElementById('c-avg-value')?.value,
+    qualify: document.getElementById('c-qualify')?.value,
+    emergencyLine: document.getElementById('c-emergency-line')?.value.trim(),
     w1: document.getElementById('c-w1').checked,
     w2: document.getElementById('c-w2').checked,
     w3: document.getElementById('c-w3').checked,
@@ -1028,3 +1048,372 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById(id)?.addEventListener('change', renderApiFields);
   });
 });
+
+// ─── RESULTS BOARD ───
+function renderResultsBoard() {
+  const allReports = state.reports;
+  const totalRevenue = allReports.reduce((s,r) => s+(parseFloat(r.data?.w1?.revenue)||0)+(parseFloat(r.data?.w2?.revenue)||0),0);
+  const totalReviews = allReports.reduce((s,r) => s+(parseFloat(r.data?.w3?.collected)||0),0);
+  const totalLeads = allReports.reduce((s,r) => s+(parseFloat(r.data?.w1?.leads)||0),0);
+
+  const clients = state.clients.filter(c => c.scoreBefore && c.scoreCurrent);
+  const avgLift = clients.length ? clients.reduce((s,c) => s+(parseFloat(c.scoreCurrent)-parseFloat(c.scoreBefore)),0)/clients.length : 0;
+
+  setHTML('rb-revenue', fmtMoney(totalRevenue));
+  setHTML('rb-reviews', totalReviews);
+  setHTML('rb-score-lift', (avgLift>=0?'+':'')+avgLift.toFixed(1)+' ⭐');
+  setHTML('rb-leads', totalLeads);
+
+  const el = document.getElementById('results-table-body');
+  if (!el) return;
+  if (!state.clients.length) { el.innerHTML = `<tr><td colspan="9">${emptyState('📊','No clients yet','Add clients to see results.')}</td></tr>`; return; }
+
+  el.innerHTML = state.clients.map(c => {
+    const clientReports = allReports.filter(r => r.clientId === c.id);
+    const rev = clientReports.reduce((s,r) => s+(parseFloat(r.data?.w1?.revenue)||0)+(parseFloat(r.data?.w2?.revenue)||0),0);
+    const leads = clientReports.reduce((s,r) => s+(parseFloat(r.data?.w1?.leads)||0),0);
+    const reviews = clientReports.reduce((s,r) => s+(parseFloat(r.data?.w3?.collected)||0),0);
+    const lastRate = clientReports.length ? clientReports[clientReports.length-1].data?.w2?.rate : null;
+    const scoreBefore = parseFloat(c.scoreBefore)||0;
+    const scoreCurrent = parseFloat(c.scoreCurrent)||0;
+    const lift = scoreBefore && scoreCurrent ? (scoreCurrent-scoreBefore).toFixed(1) : null;
+    const score = calcHealth(c);
+
+    return `<tr style="cursor:pointer" onclick="openClientDetail('${c.id}')">
+      <td><div class="td-primary">${c.name}</div><div class="td-secondary">${c.subindustry||c.market||''}</div></td>
+      <td><span class="text-small">${c.market||'—'}</span></td>
+      <td>
+        ${scoreBefore?`<div style="font-size:0.78rem">
+          <span style="color:var(--muted)">Before: ${scoreBefore}⭐</span><br>
+          <span style="color:var(--green);font-weight:700">Now: ${scoreCurrent||'—'}⭐</span>
+          ${lift?`<span style="color:var(--green);font-weight:800"> (+${lift})</span>`:''}
+        </div>`:'<span class="text-muted text-small">Not set</span>'}
+      </td>
+      <td class="td-mono">${leads||0}</td>
+      <td class="td-mono">${fmtMoney(rev)}</td>
+      <td class="td-mono">${lastRate?lastRate+'%':'—'}</td>
+      <td class="td-mono">${reviews||0} ⭐</td>
+      <td><div class="health-score"><div class="health-bar"><div class="health-bar-fill ${healthClass(score)}" style="width:${score}%"></div></div><span class="health-num">${score}</span></div></td>
+      <td><button class="btn btn-ghost btn-xs">View →</button></td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── VOICE INTELLIGENCE ───
+function renderVoiceView() {
+  if (!state.calls) state.calls = [];
+  const calls = state.calls;
+  const total = calls.length;
+  const booked = calls.filter(c => c.booked === 'yes').length;
+  const followupSent = calls.filter(c => c.followupSent === 'yes').length;
+  const needsFollowup = calls.filter(c => c.booked === 'no' && c.followupSent !== 'yes' && c.outcome !== 'not-qualified').length;
+
+  setHTML('v-total', total);
+  setHTML('v-booked', booked);
+  setHTML('v-followup', followupSent);
+  setHTML('v-needs', needsFollowup);
+
+  // populate filter
+  const sel = document.getElementById('voice-client-filter');
+  if (sel) {
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">All Clients</option>' + state.clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+    if (prev) sel.value = prev;
+  }
+  renderVoiceLog();
+}
+
+function renderVoiceLog() {
+  const el = document.getElementById('voice-log-body');
+  if (!el) return;
+  if (!state.calls) state.calls = [];
+  const filter = document.getElementById('voice-client-filter')?.value;
+  const calls = filter ? state.calls.filter(c=>c.clientId===filter) : state.calls;
+  const sorted = [...calls].sort((a,b)=>new Date(b.datetime)-new Date(a.datetime));
+
+  if (!sorted.length) { el.innerHTML = emptyState('📞','No calls logged yet','Click "+ Log Call" to add a call.'); return; }
+
+  const outcomeColors = { qualified:'var(--green)', interested:'var(--amber)', voicemail:'var(--muted)', callback:'var(--accent)', 'not-qualified':'var(--muted)', 'wrong-number':'var(--muted)' };
+  const outcomeLabels = { qualified:'Qualified ✓', interested:'Interested', voicemail:'Voicemail', callback:'Callback Req.', 'not-qualified':'Not Qualified', 'wrong-number':'Wrong #' };
+
+  el.innerHTML = `<table><thead><tr>
+    <th>Date/Time</th><th>Client</th><th>Duration</th>
+    <th>Service Interest</th><th>Outcome</th><th>Booked</th>
+    <th>Follow-Up</th><th>Offer</th><th>Result</th><th></th>
+  </tr></thead><tbody>${sorted.map(call => {
+    const c = state.clients.find(cl=>cl.id===call.clientId);
+    const needsAction = call.booked==='no' && call.followupSent!=='yes' && call.outcome!=='not-qualified';
+    return `<tr ${needsAction?'style="background:rgba(204,51,51,0.04)"':''}>
+      <td class="td-mono" style="font-size:0.78rem">${call.datetime?new Date(call.datetime).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'—'}</td>
+      <td><div class="td-primary">${c?c.name:'—'}</div></td>
+      <td class="td-mono">${call.duration||'—'}</td>
+      <td style="font-size:0.82rem;max-width:160px">${call.interest||'—'}</td>
+      <td><span style="font-size:0.75rem;font-weight:700;color:${outcomeColors[call.outcome]||'var(--muted)'}">${outcomeLabels[call.outcome]||call.outcome||'—'}</span></td>
+      <td>${call.booked==='yes'?'<span class="badge badge-active">Booked</span>':'<span class="badge badge-unpaid">No</span>'}</td>
+      <td>${call.followupSent==='yes'?'<span class="badge badge-paid">Sent</span>':needsAction?'<span class="badge badge-risk">⚠ Needed</span>':'<span class="text-muted text-small">—</span>'}</td>
+      <td style="font-size:0.78rem">${call.offer?'Offer '+call.offer:'—'}</td>
+      <td style="font-size:0.78rem;color:${call.followupResult==='booked'?'var(--green)':call.followupResult==='no-response'?'var(--muted)':'var(--red)'}">${call.followupResult||'—'}</td>
+      <td><button class="btn btn-ghost btn-xs" onclick="viewCallDetail('${call.id}')">Detail</button></td>
+    </tr>`;
+  }).join('')}</tbody></table>`;
+}
+
+function openAddCall() {
+  const sel = document.getElementById('call-client');
+  sel.innerHTML = state.clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  document.getElementById('call-datetime').value = new Date().toISOString().slice(0,16);
+  ['call-number','call-duration','call-interest','call-objection','call-transcript'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('call-outcome').value='interested';
+  document.getElementById('call-booked').value='no';
+  document.getElementById('call-followup-sent').value='no';
+  document.getElementById('call-offer').value='';
+  document.getElementById('call-followup-result').value='pending';
+  openModal('modal-add-call');
+}
+
+function saveCall() {
+  const clientId = document.getElementById('call-client').value;
+  if (!clientId) { showToast('Select a client','error'); return; }
+  if (!state.calls) state.calls = [];
+  const call = {
+    id: uid(), clientId,
+    datetime: document.getElementById('call-datetime').value,
+    number: document.getElementById('call-number').value,
+    duration: document.getElementById('call-duration').value,
+    outcome: document.getElementById('call-outcome').value,
+    booked: document.getElementById('call-booked').value,
+    interest: document.getElementById('call-interest').value,
+    objection: document.getElementById('call-objection').value,
+    transcript: document.getElementById('call-transcript').value,
+    followupSent: document.getElementById('call-followup-sent').value,
+    offer: document.getElementById('call-offer').value,
+    followupResult: document.getElementById('call-followup-result').value,
+    created: now(),
+  };
+  state.calls.push(call);
+  const c = state.clients.find(cl=>cl.id===clientId);
+  logActivity(clientId, `Call logged — ${call.outcome} — ${call.interest||'no service noted'}`, call.booked==='yes'?'var(--green)':'var(--amber)');
+  saveState(); closeModal('modal-add-call'); renderAll();
+  showToast('Call logged','success');
+}
+
+function viewCallDetail(id) {
+  const call = (state.calls||[]).find(c=>c.id===id);
+  if (!call) return;
+  const c = state.clients.find(cl=>cl.id===call.clientId);
+  const html = `
+    <div style="margin-bottom:16px"><h3 style="font-size:1rem;font-weight:700">${c?c.name:'Unknown'} — Call Detail</h3>
+    <div style="font-size:0.78rem;color:var(--muted)">${call.datetime?new Date(call.datetime).toLocaleString():''}</div></div>
+    <div class="detail-info-row"><div class="detail-info-label">Service Interest</div><div class="detail-info-val">${call.interest||'—'}</div></div>
+    <div class="detail-info-row"><div class="detail-info-label">Outcome</div><div class="detail-info-val">${call.outcome}</div></div>
+    <div class="detail-info-row"><div class="detail-info-label">Objection</div><div class="detail-info-val">${call.objection||'None noted'}</div></div>
+    <div class="detail-info-row"><div class="detail-info-label">Follow-Up Offer</div><div class="detail-info-val">${call.offer?'Offer '+call.offer:'None sent'}</div></div>
+    <div class="detail-info-row"><div class="detail-info-label">Follow-Up Result</div><div class="detail-info-val">${call.followupResult}</div></div>
+    ${call.transcript?`<div style="margin-top:16px"><div class="form-section-title">Transcript</div><div style="margin-top:8px;padding:14px;background:var(--surface2);border-radius:var(--radius-sm);font-size:0.82rem;line-height:1.7;white-space:pre-wrap">${call.transcript}</div></div>`:''}`;
+  document.getElementById('report-preview-body').innerHTML = html;
+  openModal('modal-report-preview');
+}
+
+// ─── REVIEW INTELLIGENCE ───
+function renderReviewIntel() {
+  const allReports = state.reports;
+  const totalReviews = allReports.reduce((s,r)=>s+(parseFloat(r.data?.w3?.collected)||0),0);
+  const totalIntercepted = allReports.reduce((s,r)=>s+(parseFloat(r.data?.w3?.intercepted)||0),0);
+  const clients = state.clients.filter(c=>c.scoreBefore&&c.scoreCurrent);
+  const avgLift = clients.length?clients.reduce((s,c)=>s+(parseFloat(c.scoreCurrent)-parseFloat(c.scoreBefore)),0)/clients.length:0;
+
+  setHTML('ri-total', totalReviews);
+  setHTML('ri-avg-lift', (avgLift>=0?'+':'')+avgLift.toFixed(1)+' ⭐');
+  setHTML('ri-intercepted', totalIntercepted);
+
+  const sel = document.getElementById('ri-client-select');
+  if (sel) sel.innerHTML = '<option value="">— Select client —</option>'+state.clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+
+  const el = document.getElementById('review-score-body');
+  if (!el) return;
+  if (!state.clients.length) { el.innerHTML = `<tr><td colspan="8">${emptyState('⭐','No clients yet','Add clients and record their Drivyn Score.')}</td></tr>`; return; }
+
+  el.innerHTML = state.clients.map(c => {
+    const before = parseFloat(c.scoreBefore)||0;
+    const current = parseFloat(c.scoreCurrent)||0;
+    const lift = before&&current?(current-before).toFixed(1):null;
+    const revBefore = parseInt(c.reviewsBefore)||0;
+    const revCurrent = parseInt(c.reviewsCurrent)||0;
+    const newRevs = revCurrent-revBefore;
+    return `<tr>
+      <td class="td-primary">${c.name}</td>
+      <td style="font-size:0.82rem">${c.market||'—'}</td>
+      <td class="td-mono">${before?before+' ⭐':'<span class="text-muted">Not set</span>'}</td>
+      <td class="td-mono" style="color:var(--green);font-weight:700">${current?current+' ⭐':'<span class="text-muted">Not set</span>'}</td>
+      <td style="font-weight:800;color:${lift&&parseFloat(lift)>0?'var(--green)':'var(--muted)'}">${lift?(parseFloat(lift)>0?'+':'')+lift+' ⭐':'—'}</td>
+      <td class="td-mono">${revBefore||'—'}</td>
+      <td class="td-mono">${revCurrent||'—'}</td>
+      <td class="td-mono" style="color:var(--green);font-weight:700">${newRevs>0?'+'+newRevs:'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function analyzeReview() {
+  const text = document.getElementById('ri-review-text').value.trim();
+  const clientId = document.getElementById('ri-client-select').value;
+  if (!text) { showToast('Paste a review to analyze','error'); return; }
+  const c = state.clients.find(cl=>cl.id===clientId);
+  const vertical = c?.market || 'Service Business';
+  const result = document.getElementById('review-analysis-result');
+  result.style.display = 'block';
+  result.innerHTML = '<div style="padding:16px;color:var(--muted);font-size:0.85rem">Analyzing review with AI...</div>';
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: `You are analyzing a customer review for a ${vertical} business using the Drivyn AI system. Review: "${text}"\n\nRespond in JSON only with no markdown:\n{"sentiment":"positive|neutral|negative","star_estimate":4,"what_is_working":["list of positives"],"what_needs_fixing":["list of negatives"],"key_themes":["main topics mentioned"],"suggested_response":"a professional response to this review","follow_up_action":"what the business should do next"}` }]
+      })
+    });
+    const data = await response.json();
+    const raw = data.content?.[0]?.text || '{}';
+    const parsed = JSON.parse(raw.replace(/```json|```/g,'').trim());
+    const sentColor = parsed.sentiment==='positive'?'var(--green)':parsed.sentiment==='negative'?'var(--red)':'var(--amber)';
+    result.innerHTML = `
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:18px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <span style="font-weight:700;font-size:0.9rem">AI Analysis</span>
+          <span style="font-weight:800;color:${sentColor};text-transform:capitalize">${parsed.sentiment} · ${parsed.star_estimate}⭐ est.</span>
+        </div>
+        ${parsed.what_is_working?.length?`<div style="margin-bottom:12px"><div style="font-size:0.7rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:var(--green);margin-bottom:6px">What's Working</div>${parsed.what_is_working.map(w=>`<div style="font-size:0.82rem;padding:4px 0;border-bottom:1px solid var(--border)">✓ ${w}</div>`).join('')}</div>`:''}
+        ${parsed.what_needs_fixing?.length?`<div style="margin-bottom:12px"><div style="font-size:0.7rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:var(--red);margin-bottom:6px">Needs Fixing</div>${parsed.what_needs_fixing.map(w=>`<div style="font-size:0.82rem;padding:4px 0;border-bottom:1px solid var(--border)">⚠ ${w}</div>`).join('')}</div>`:''}
+        ${parsed.suggested_response?`<div style="margin-bottom:12px"><div style="font-size:0.7rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:var(--accent);margin-bottom:6px">Suggested Response</div><div style="font-size:0.82rem;padding:10px;background:var(--surface);border-radius:var(--radius-sm);font-style:italic">"${parsed.suggested_response}"</div></div>`:''}
+        ${parsed.follow_up_action?`<div style="padding:10px 12px;background:var(--accent-light);border:1px solid var(--accent-mid);border-radius:var(--radius-sm);font-size:0.8rem;color:var(--accent)">💡 ${parsed.follow_up_action}</div>`:''}
+      </div>`;
+  } catch(e) {
+    result.innerHTML = '<div style="padding:12px;color:var(--red);font-size:0.82rem">Analysis failed. Check your connection and try again.</div>';
+  }
+}
+
+function clearReviewAnalysis() {
+  document.getElementById('ri-review-text').value = '';
+  const el = document.getElementById('review-analysis-result');
+  el.style.display = 'none';
+  el.innerHTML = '';
+}
+
+// ─── WIN-BACK LAB ───
+function renderWinBackLab() {
+  if (!state.campaigns) state.campaigns = [];
+  const active = state.campaigns.filter(c=>c.status==='active').length;
+  const allRates = state.campaigns.filter(c=>c.sent>0).map(c=>((parseInt(c.booked)||0)/(parseInt(c.sent)||1)*100));
+  const avgRate = allRates.length?allRates.reduce((a,b)=>a+b,0)/allRates.length:0;
+  const winner = state.campaigns.reduce((best,c) => {
+    const rate = c.sent>0?(parseInt(c.booked)||0)/(parseInt(c.sent))*100:0;
+    const bestRate = best?(parseInt(best.booked)||0)/(parseInt(best.sent)||1)*100:0;
+    return rate>bestRate?c:best;
+  }, null);
+
+  setHTML('wb-active', active);
+  setHTML('wb-best', winner?`${winner.name} (${((parseInt(winner.booked)||0)/(parseInt(winner.sent)||1)*100).toFixed(0)}%)`:'—');
+  setHTML('wb-avg-rate', avgRate.toFixed(0)+'%');
+
+  const el = document.getElementById('winback-campaigns');
+  if (!el) return;
+  if (!state.campaigns.length) {
+    el.innerHTML = `<div class="table-wrap">${emptyState('🔄','No campaigns yet','Click "+ New Campaign" to start A/B testing.')}</div>`;
+    return;
+  }
+
+  // Group by client
+  const byClient = {};
+  state.campaigns.forEach(camp => {
+    if (!byClient[camp.clientId]) byClient[camp.clientId] = [];
+    byClient[camp.clientId].push(camp);
+  });
+
+  el.innerHTML = Object.entries(byClient).map(([clientId, camps]) => {
+    const c = state.clients.find(cl=>cl.id===clientId);
+    const topCamp = camps.reduce((best,camp) => {
+      const rate = camp.sent>0?(parseInt(camp.booked)||0)/(parseInt(camp.sent))*100:0;
+      const bestRate = best?(parseInt(best.booked)||0)/(parseInt(best.sent)||1)*100:0;
+      return rate>bestRate?camp:best;
+    }, null);
+
+    return `<div class="table-wrap" style="margin-bottom:16px">
+      <div class="table-header">
+        <div>
+          <div class="card-title">${c?c.name:'Unknown'}</div>
+          <div style="font-size:0.75rem;color:var(--muted)">${c?.market||''} · ${camps.length} campaign${camps.length!==1?'s':''}</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="openAddCampaignForClient('${clientId}')">+ Add Campaign</button>
+      </div>
+      <table><thead><tr>
+        <th>Campaign</th><th>Strategy</th><th>Variant</th>
+        <th>Sent</th><th>Replies</th><th>Booked</th>
+        <th>Rate</th><th>Revenue</th><th>Status</th>
+      </tr></thead><tbody>${camps.map(camp => {
+        const rate = camp.sent>0?((parseInt(camp.booked)||0)/(parseInt(camp.sent))*100).toFixed(0):0;
+        const isWinner = topCamp&&camp.id===topCamp.id&&parseInt(camp.booked)>0;
+        return `<tr ${isWinner?'style="background:rgba(26,156,91,0.04)"':''}>
+          <td><div class="td-primary">${camp.name}${isWinner?' 🏆':''}</div><div class="td-secondary">${fmtDate(camp.date)}</div></td>
+          <td style="font-size:0.8rem">${camp.strategy||'—'}</td>
+          <td><span class="badge ${camp.variant==='A'?'badge-w1':camp.variant==='B'?'badge-w2':'badge-w3'}">Offer ${camp.variant}</span></td>
+          <td class="td-mono">${camp.sent||0}</td>
+          <td class="td-mono">${camp.replies||0}</td>
+          <td class="td-mono">${camp.booked||0}</td>
+          <td style="font-weight:700;color:${parseFloat(rate)>=10?'var(--green)':parseFloat(rate)>=5?'var(--amber)':'var(--muted)'}">${rate}%</td>
+          <td class="td-mono">${fmtMoney(camp.revenue||0)}</td>
+          <td>${camp.status==='active'?'<span class="badge badge-active">Active</span>':camp.status==='complete'?'<span class="badge badge-paid">Done</span>':'<span class="badge badge-paused">Paused</span>'}</td>
+        </tr>`;
+      }).join('')}</tbody></table>
+    </div>`;
+  }).join('');
+}
+
+function openAddCampaign() {
+  const sel = document.getElementById('camp-client');
+  sel.innerHTML = state.clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  ['camp-name','camp-message','camp-sent','camp-replies','camp-booked','camp-revenue'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('camp-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('camp-status').value = 'active';
+  document.getElementById('camp-variant').value = 'A';
+  openModal('modal-add-campaign');
+}
+
+function openAddCampaignForClient(clientId) {
+  openAddCampaign();
+  document.getElementById('camp-client').value = clientId;
+}
+
+function saveCampaign() {
+  const clientId = document.getElementById('camp-client').value;
+  const name = document.getElementById('camp-name').value.trim();
+  if (!clientId||!name) { showToast('Client and campaign name required','error'); return; }
+  if (!state.campaigns) state.campaigns = [];
+  const camp = {
+    id: uid(), clientId, name,
+    strategy: document.getElementById('camp-strategy').value,
+    variant: document.getElementById('camp-variant').value,
+    message: document.getElementById('camp-message').value,
+    sent: document.getElementById('camp-sent').value,
+    replies: document.getElementById('camp-replies').value,
+    booked: document.getElementById('camp-booked').value,
+    revenue: document.getElementById('camp-revenue').value,
+    date: document.getElementById('camp-date').value,
+    status: document.getElementById('camp-status').value,
+    created: now(),
+  };
+  state.campaigns.push(camp);
+  const c = state.clients.find(cl=>cl.id===clientId);
+  logActivity(clientId, `Win-back campaign launched: ${name}`, 'var(--purple)');
+  saveState(); closeModal('modal-add-campaign'); renderAll();
+  showToast('Campaign saved','success');
+}
+
+// ─── HOOK INTO RENDER ALL ───
+const _origRenderAll = renderAll;
+function renderAll() {
+  _origRenderAll();
+  renderResultsBoard();
+  renderVoiceView();
+  renderReviewIntel();
+  renderWinBackLab();
+}
