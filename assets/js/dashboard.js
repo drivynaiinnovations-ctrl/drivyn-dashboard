@@ -367,7 +367,9 @@ function renderClientDetail(id) {
         </div>
       </div>
 
-      <!-- RECENT REPORTS -->
+      <!-- GOOGLE REVIEW SETUP -->
+      ${c.w3 ? renderGBPSetup(c) : ''}
+
       <div class="card mb-16">
         <div class="card-header">
           <div class="card-title">Reports (${clientReports.length})</div>
@@ -1056,9 +1058,11 @@ function renderResultsBoard() {
   const totalRevenue = allReports.reduce((s,r) => s+(parseFloat(r.data?.w1?.revenue)||0)+(parseFloat(r.data?.w2?.revenue)||0),0);
   const totalReviews = allReports.reduce((s,r) => s+(parseFloat(r.data?.w3?.collected)||0),0);
   const totalLeads = allReports.reduce((s,r) => s+(parseFloat(r.data?.w1?.leads)||0),0);
+  const totalReactivations = allReports.reduce((s,r) => s+(parseFloat(r.data?.w2?.booked)||0),0);
 
-  const clients = state.clients.filter(c => c.scoreBefore && c.scoreCurrent);
-  const avgLift = clients.length ? clients.reduce((s,c) => s+(parseFloat(c.scoreCurrent)-parseFloat(c.scoreBefore)),0)/clients.length : 0;
+  const scoredClients = state.clients.filter(c => c.scoreBefore && c.scoreCurrent);
+  const avgLift = scoredClients.length
+    ? scoredClients.reduce((s,c) => s+(parseFloat(c.scoreCurrent)-parseFloat(c.scoreBefore)),0)/scoredClients.length : 0;
 
   setHTML('rb-revenue', fmtMoney(totalRevenue));
   setHTML('rb-reviews', totalReviews);
@@ -1067,35 +1071,84 @@ function renderResultsBoard() {
 
   const el = document.getElementById('results-table-body');
   if (!el) return;
-  if (!state.clients.length) { el.innerHTML = `<tr><td colspan="9">${emptyState('📊','No clients yet','Add clients to see results.')}</td></tr>`; return; }
+  if (!state.clients.length) {
+    el.innerHTML = `<tr><td colspan="10">${emptyState('📊','No clients yet','Add clients to see results.')}</td></tr>`;
+    return;
+  }
 
   el.innerHTML = state.clients.map(c => {
-    const clientReports = allReports.filter(r => r.clientId === c.id);
-    const rev = clientReports.reduce((s,r) => s+(parseFloat(r.data?.w1?.revenue)||0)+(parseFloat(r.data?.w2?.revenue)||0),0);
-    const leads = clientReports.reduce((s,r) => s+(parseFloat(r.data?.w1?.leads)||0),0);
-    const reviews = clientReports.reduce((s,r) => s+(parseFloat(r.data?.w3?.collected)||0),0);
-    const lastRate = clientReports.length ? clientReports[clientReports.length-1].data?.w2?.rate : null;
+    const cr = allReports.filter(r => r.clientId === c.id);
+    const w1Rev   = cr.reduce((s,r) => s+(parseFloat(r.data?.w1?.revenue)||0),0);
+    const w1Leads = cr.reduce((s,r) => s+(parseFloat(r.data?.w1?.leads)||0),0);
+    const w1Conv  = cr.reduce((s,r) => s+(parseFloat(r.data?.w1?.converted)||0),0);
+    const w2Book  = cr.reduce((s,r) => s+(parseFloat(r.data?.w2?.booked)||0),0);
+    const w2Rev   = cr.reduce((s,r) => s+(parseFloat(r.data?.w2?.revenue)||0),0);
+    const w3Rev   = cr.reduce((s,r) => s+(parseFloat(r.data?.w3?.collected)||0),0);
+    const w3Stars = cr.length ? cr[cr.length-1].data?.w3?.stars : null;
+    const totalRev = w1Rev + w2Rev;
+
     const scoreBefore = parseFloat(c.scoreBefore)||0;
     const scoreCurrent = parseFloat(c.scoreCurrent)||0;
-    const lift = scoreBefore && scoreCurrent ? (scoreCurrent-scoreBefore).toFixed(1) : null;
-    const score = calcHealth(c);
+    const reviewsBefore = parseInt(c.reviewsBefore)||0;
+    const reviewsCurrent = parseInt(c.reviewsCurrent)||0;
+    const lift = scoreBefore && scoreCurrent ? parseFloat((scoreCurrent-scoreBefore).toFixed(1)) : null;
+    const newRevs = reviewsCurrent - reviewsBefore;
+    const health = calcHealth(c);
+
+    // Drivyn Score cell
+    const scoreCell = scoreBefore
+      ? `<div style="font-size:0.8rem;line-height:1.6">
+           <span style="color:var(--muted)">${scoreBefore}★ →</span>
+           <span style="font-weight:800;color:${lift&&lift>0?'var(--green)':'var(--muted)'}"> ${scoreCurrent||'?'}★</span>
+           ${lift&&lift>0?`<span style="font-size:0.7rem;font-weight:800;color:var(--green)"> +${lift}</span>`:''}
+           ${newRevs>0?`<div style="font-size:0.7rem;color:var(--green)">+${newRevs} reviews</div>`:''}
+         </div>`
+      : '<span style="font-size:0.72rem;color:var(--muted)">Day 1 not set</span>';
+
+    // Wedge badges
+    const w1Badge = c.w1 ? `<span class="badge badge-w1" title="Missed Lead Recovery">W1</span>` : '';
+    const w2Badge = c.w2 ? `<span class="badge badge-w2" title="Dead Database">W2</span>` : '';
+    const w3Badge = c.w3 ? `<span class="badge badge-w3" title="Review Gap">W3</span>` : '';
+
+    // GBP setup completion
+    const gbpSteps = 8;
+    const gbpDone = c.gbpSetup ? Object.values(c.gbpSetup).filter(Boolean).length : 0;
+    const gbpPct = Math.round(gbpDone/gbpSteps*100);
+    const gbpBadge = c.w3
+      ? `<div style="font-size:0.7rem;margin-top:2px;color:${gbpPct===100?'var(--green)':gbpPct>0?'var(--amber)':'var(--muted)'}">${gbpPct===100?'✓ Live':gbpDone+'/'+gbpSteps+' setup'}</div>`
+      : '';
 
     return `<tr style="cursor:pointer" onclick="openClientDetail('${c.id}')">
-      <td><div class="td-primary">${c.name}</div><div class="td-secondary">${c.subindustry||c.market||''}</div></td>
-      <td><span class="text-small">${c.market||'—'}</span></td>
       <td>
-        ${scoreBefore?`<div style="font-size:0.78rem">
-          <span style="color:var(--muted)">Before: ${scoreBefore}⭐</span><br>
-          <span style="color:var(--green);font-weight:700">Now: ${scoreCurrent||'—'}⭐</span>
-          ${lift?`<span style="color:var(--green);font-weight:800"> (+${lift})</span>`:''}
-        </div>`:'<span class="text-muted text-small">Not set</span>'}
+        <div class="td-primary">${c.name}</div>
+        <div style="display:flex;gap:3px;margin-top:3px">${w1Badge}${w2Badge}${w3Badge}</div>
+        ${gbpBadge}
       </td>
-      <td class="td-mono">${leads||0}</td>
-      <td class="td-mono">${fmtMoney(rev)}</td>
-      <td class="td-mono">${lastRate?lastRate+'%':'—'}</td>
-      <td class="td-mono">${reviews||0} ⭐</td>
-      <td><div class="health-score"><div class="health-bar"><div class="health-bar-fill ${healthClass(score)}" style="width:${score}%"></div></div><span class="health-num">${score}</span></div></td>
-      <td><button class="btn btn-ghost btn-xs">View →</button></td>
+      <td style="font-size:0.78rem;color:var(--muted)">${c.market||'—'}</td>
+      <td>${scoreCell}</td>
+      <td>
+        ${c.w1?`<div style="font-size:0.82rem;font-weight:700">${w1Leads} leads</div>
+        <div style="font-size:0.72rem;color:var(--muted)">${w1Conv} booked · ${fmtMoney(w1Rev)}</div>`
+        :'<span style="color:var(--muted);font-size:0.72rem">—</span>'}
+      </td>
+      <td>
+        ${c.w2?`<div style="font-size:0.82rem;font-weight:700">${w2Book} reactivated</div>
+        <div style="font-size:0.72rem;color:var(--muted)">${fmtMoney(w2Rev)}</div>`
+        :'<span style="color:var(--muted);font-size:0.72rem">—</span>'}
+      </td>
+      <td>
+        ${c.w3?`<div style="font-size:0.82rem;font-weight:700">${w3Rev} reviews</div>
+        <div style="font-size:0.72rem;color:var(--muted)">${w3Stars?w3Stars+'★ avg':''}</div>`
+        :'<span style="color:var(--muted);font-size:0.72rem">—</span>'}
+      </td>
+      <td style="font-weight:800;color:var(--green);font-size:0.9rem">${fmtMoney(totalRev)}</td>
+      <td>
+        <div class="health-score">
+          <div class="health-bar"><div class="health-bar-fill ${healthClass(health)}" style="width:${health}%"></div></div>
+          <span class="health-num">${health}</span>
+        </div>
+      </td>
+      <td><button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();openClientDetail('${c.id}')">View →</button></td>
     </tr>`;
   }).join('');
 }
@@ -1863,4 +1916,80 @@ function renderAll() {
     rsel.innerHTML = '<option value="">— Select a client —</option>' +
       state.clients.filter(c=>c.status!=='Churned').map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
   }
+}
+
+// ═══════════════════════════════════════════
+// GOOGLE REVIEW SETUP — PER CLIENT
+// ═══════════════════════════════════════════
+
+function renderGBPSetup(c) {
+  const steps = [
+    { id:'gbp_access',   label:'GBP Manager Access granted to ryan@getdrivynai.com', who:'Client', auto:false, note:'Client: GBP → Settings → Managers → Add ryan@getdrivynai.com' },
+    { id:'gbp_email',    label:'HappyGuest@ email created + staff assigned', who:'Client', auto:false, note:'Client creates HappyGuest@[theirdomain].com, forwards to monitoring staff' },
+    { id:'gbp_make',     label:'Make.com GBP watcher scenario built', who:'Drivyn AI', auto:true, note:'Watches GBP 24/7 — triggers on every new review automatically' },
+    { id:'gbp_claude',   label:'Claude API response scenario configured', who:'Drivyn AI', auto:true, note:'Routes review → Claude → generates response → posts to GBP in <2 min' },
+    { id:'gbp_api',      label:'Google API access approved (7–10 days)', who:'Google', auto:false, note:'Drivyn AI submits request. Manual posting via email during approval window.' },
+    { id:'gbp_alerts',   label:'Staff alert emails configured in Make.com', who:'Drivyn AI', auto:true, note:'Every review → formatted alert email to client staff — positive and negative' },
+    { id:'gbp_happy',    label:'HappyGuest loop configured + tested', who:'Drivyn AI', auto:true, note:'Guest emails HappyGuest@ → AI replies, collects details, briefs staff within 2 min' },
+    { id:'gbp_score',    label:'Drivyn Score recorded (before rating + review count)', who:'Drivyn AI', auto:false, note:'CRITICAL: Must be logged in client profile on Day 1. Cannot be recovered.' },
+  ];
+
+  const checks = c.gbpSetup || {};
+  const done = steps.filter(s => checks[s.id]).length;
+  const pct = Math.round((done / steps.length) * 100);
+  const allDone = done === steps.length;
+
+  return `
+  <div class="card mb-16">
+    <div class="card-header">
+      <div class="card-header-left">
+        <div class="card-title">⭐ Google Review Setup</div>
+        <div class="card-subtitle">${done}/${steps.length} steps complete · ${pct}% ready</div>
+      </div>
+      ${allDone ? '<span class="badge badge-active">Live ✓</span>' : `<span class="badge badge-warning">${pct < 50 ? 'Not Started' : 'In Progress'}</span>`}
+    </div>
+    <div class="card-body" style="padding:0">
+      <div style="height:4px;background:var(--border);border-radius:0"><div style="height:100%;width:${pct}%;background:${allDone?'var(--green)':'var(--accent)'};border-radius:0;transition:width 0.4s"></div></div>
+      <div style="padding:12px">
+        ${steps.map(s => {
+          const checked = !!checks[s.id];
+          return `<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
+            <input type="checkbox" ${checked?'checked':''} 
+              onchange="toggleGBPStep('${c.id}','${s.id}',this.checked)"
+              style="margin-top:3px;accent-color:var(--${s.auto?'accent':'green'});cursor:pointer;width:15px;height:15px;flex-shrink:0">
+            <div style="flex:1">
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                <span style="font-size:0.83rem;font-weight:${checked?'500':'600'};color:${checked?'var(--muted)':'var(--black)'};text-decoration:${checked?'line-through':''}">${s.label}</span>
+                <span style="font-size:0.62rem;font-weight:700;padding:1px 6px;border-radius:100px;${s.auto?'background:var(--accent-light);color:var(--accent)':'background:var(--green-light);color:var(--green)'}">${s.auto?'Auto':'Manual'}</span>
+                <span style="font-size:0.62rem;color:var(--muted-light)">${s.who}</span>
+              </div>
+              <div style="font-size:0.74rem;color:var(--muted);margin-top:2px">${s.note}</div>
+            </div>
+          </div>`;
+        }).join('')}
+        <div style="padding:12px;margin-top:8px;background:var(--accent-light);border-radius:var(--radius-sm);font-size:0.78rem">
+          <div style="font-weight:700;color:var(--accent);margin-bottom:4px">After full setup — staff time required per review:</div>
+          <div style="color:rgba(10,10,10,0.7);line-height:1.6">
+            ✅ Positive reviews (4–5★): <b>0 minutes</b> — AI responds automatically<br>
+            ⚡ Negative reviews (1–3★): <b>5–10 min</b> — one phone call to guest after AI routes + briefs staff<br>
+            📊 Monthly review: <b>5 min</b> — glance at Drivyn Score in dashboard<br>
+            <b>Total: ~30 min/month</b> vs 3–5 hrs manually
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function toggleGBPStep(clientId, stepId, checked) {
+  const c = state.clients.find(cl => cl.id === clientId);
+  if (!c) return;
+  if (!c.gbpSetup) c.gbpSetup = {};
+  c.gbpSetup[stepId] = checked;
+  const label = stepId.replace('gbp_','').replace('_',' ');
+  logActivity(clientId, `GBP setup: ${label} ${checked?'✓ completed':'unchecked'}`, checked?'var(--green)':'var(--muted)');
+  saveState();
+  // Re-render detail without full page reload
+  if (state.currentClientId === clientId) renderClientDetail(clientId);
+  showToast(checked ? 'Step marked complete' : 'Step unchecked', checked?'success':'info');
 }
