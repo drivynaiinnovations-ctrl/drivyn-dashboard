@@ -37,6 +37,7 @@ function saveState() {
       referrals: state.referrals,
       calls: state.calls,
       campaigns: state.campaigns,
+      sofHistory: state.sofHistory || [],
     }));
   } catch(e) { console.warn('State save failed', e); }
 }
@@ -174,7 +175,7 @@ function showView(id, btn) {
   if (view) view.classList.add('active');
   if (btn) btn.classList.add('active');
   state.currentView = id;
-  const titles = { home:'Dashboard', clients:'Clients', billing:'Billing & Invoices', reports:'Reports', connections:'API Connections', detail:'Client Detail' };
+  const titles = { home:'Dashboard', clients:'Clients', billing:'Billing & Payments', reports:'Reports', connections:'API Connections', detail:'Client Detail', results:'Results Board', voice:'Voice Intelligence', reviews:'Review Intelligence', winback:'Win-Back Lab', sof:'SOF Generator' };
   document.getElementById('topbar-title').textContent = titles[id] || 'Dashboard';
   renderAll();
 }
@@ -1416,4 +1417,450 @@ function renderAll() {
   renderVoiceView();
   renderReviewIntel();
   renderWinBackLab();
+}
+
+// ═══════════════════════════════════════════
+// SOF GENERATOR — DRIVYN AI
+// ═══════════════════════════════════════════
+
+// ─── PRICING CONSTANTS ───
+const SOF_PRICES = {
+  voice: {
+    monthly: { label:'Monthly', amount:750, period:'/mo' },
+    annual:  { label:'Annual (save $1,350)', amount:7650, period:'/yr' },
+    bundle:  { label:'Bundle w/ Review', amount:950, period:'/mo' },
+    setup:   { standard:1497 }
+  },
+  review: {
+    monthly: { label:'Monthly', amount:297, period:'/mo' },
+    annual:  { label:'Annual (save $534)', amount:3029, period:'/yr' },
+    bundle:  { label:'Bundle w/ Voice', amount:950, period:'/mo' },
+    setup:   { standard:997 }
+  }
+};
+
+// ─── SOF STATE ───
+let sofCurrentHTML = '';
+let sofCurrentClientId = '';
+
+// ─── POPULATE SOF CLIENT SELECT ───
+function populateSofClient() {
+  const sel = document.getElementById('sof-client');
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">— Select a client —</option>' +
+    state.clients.filter(c => c.status !== 'Churned')
+      .map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  if (prev) sel.value = prev;
+}
+
+function onSofClientChange() {
+  const id = document.getElementById('sof-client').value;
+  sofCurrentClientId = id;
+  const prev = document.getElementById('sof-client-preview');
+  if (!id) { prev.style.display = 'none'; return; }
+  const c = state.clients.find(cl => cl.id === id);
+  if (!c) return;
+  prev.style.display = 'block';
+  document.getElementById('sof-preview-name').textContent = c.name + (c.owner ? ' · ' + c.owner : '');
+  document.getElementById('sof-preview-addr').textContent = c.serviceArea || c.website || '—';
+  document.getElementById('sof-preview-contact').textContent = (c.email || '') + (c.phone ? ' · ' + c.phone : '');
+}
+
+// ─── SETUP FEE CHANGE ───
+function sofSetupChange(svc) {
+  const val = document.getElementById(`sof-${svc}-setup`).value;
+  const wrap = document.getElementById(`sof-${svc}-custom-wrap`);
+  if (wrap) wrap.style.display = val === 'custom' ? 'block' : 'none';
+  calcSofTotal();
+}
+
+// ─── TOGGLE SOF SERVICE CARD ───
+function toggleSofSection(bodyId, header) {
+  const body = document.getElementById(bodyId);
+  if (body) body.classList.toggle('open');
+  if (header) header.classList.toggle('active');
+}
+
+// ─── CALCULATE SOF TOTALS ───
+function calcSofTotal() {
+  const hasVoice = document.getElementById('sof-voice')?.checked;
+  const hasReview = document.getElementById('sof-review')?.checked;
+
+  let setupTotal = 0;
+  let recurringTotal = 0;
+  let recurringPeriod = '/mo';
+  const lines = [];
+
+  if (hasVoice) {
+    const plan = document.getElementById('sof-voice-plan').value;
+    const setupSel = document.getElementById('sof-voice-setup').value;
+    let setup = setupSel === '0' ? 0 : setupSel === 'custom'
+      ? (parseFloat(document.getElementById('sof-voice-setup-custom')?.value) || 0)
+      : 1497;
+    const p = SOF_PRICES.voice[plan];
+    setupTotal += setup;
+    recurringTotal += p.amount;
+    recurringPeriod = p.period;
+    lines.push({ label: `Voice Agent — ${p.label}`, setup, recurring: p.amount, period: p.period });
+  }
+
+  if (hasReview) {
+    const plan = document.getElementById('sof-review-plan').value;
+    const setupSel = document.getElementById('sof-review-setup').value;
+    let setup = setupSel === '0' ? 0 : setupSel === 'custom'
+      ? (parseFloat(document.getElementById('sof-review-setup-custom')?.value) || 0)
+      : 997;
+    const p = SOF_PRICES.review[plan];
+    setupTotal += setup;
+    recurringTotal += p.amount;
+    recurringPeriod = p.period;
+    lines.push({ label: `Review Agent — ${p.label}`, setup, recurring: p.amount, period: p.period });
+  }
+
+  // Bundle dedup — if both bundle selected, only charge $950/mo once
+  const vPlan = document.getElementById('sof-voice-plan')?.value;
+  const rPlan = document.getElementById('sof-review-plan')?.value;
+  if (hasVoice && hasReview && (vPlan === 'bundle' || rPlan === 'bundle')) {
+    recurringTotal = 950;
+    recurringPeriod = '/mo';
+  }
+
+  // Discount
+  const discType = document.getElementById('sof-discount-type').value;
+  const discVal = parseFloat(document.getElementById('sof-discount-val')?.value) || 0;
+  let discountAmt = 0;
+  let discountLabel = '';
+  if (discType === 'pct' && discVal > 0) {
+    discountAmt = Math.round(setupTotal * discVal / 100);
+    discountLabel = `${discVal}% discount on setup`;
+  } else if (discType === 'flat' && discVal > 0) {
+    discountAmt = discVal;
+    discountLabel = `$${discVal} discount`;
+  } else if (discType === 'setup') {
+    discountAmt = setupTotal;
+    discountLabel = 'Setup fee waived';
+  }
+  setupTotal = Math.max(0, setupTotal - discountAmt);
+
+  // Render summary
+  const summaryEl = document.getElementById('sof-summary');
+  if (summaryEl) {
+    summaryEl.innerHTML = lines.map(l => `
+      <div style="display:flex;justify-content:space-between;font-size:0.78rem">
+        <span style="color:rgba(255,255,255,0.6)">${l.label}</span>
+        <span style="color:rgba(255,255,255,0.8)">$${l.setup} setup · $${l.recurring}${l.period}</span>
+      </div>`).join('') +
+      (discountAmt > 0 ? `<div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--green)"><span>🎁 ${discountLabel}</span><span>−$${discountAmt}</span></div>` : '') +
+      (!hasVoice && !hasReview ? '<div style="font-size:0.78rem;color:rgba(255,255,255,0.3)">No services selected</div>' : '');
+  }
+
+  setHTML('sof-total-setup', '$' + setupTotal.toLocaleString());
+  setHTML('sof-total-recurring', hasVoice || hasReview ? '$' + recurringTotal.toLocaleString() + recurringPeriod : '—');
+
+  return { lines, setupTotal, recurringTotal, recurringPeriod, discountAmt, discountLabel, hasVoice, hasReview };
+}
+
+// ─── GENERATE SOF ───
+function generateSOF() {
+  const clientId = document.getElementById('sof-client').value;
+  if (!clientId) { showToast('Select a client first', 'error'); return; }
+  const c = state.clients.find(cl => cl.id === clientId);
+  if (!c) return;
+
+  const totals = calcSofTotal();
+  if (!totals.hasVoice && !totals.hasReview) { showToast('Select at least one service', 'error'); return; }
+
+  const vPlan = document.getElementById('sof-voice-plan')?.value;
+  const rPlan = document.getElementById('sof-review-plan')?.value;
+  const notes = document.getElementById('sof-notes')?.value?.trim();
+  const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  const refNum = 'DAI-' + Date.now().toString(36).toUpperCase().slice(-6);
+
+  // Determine which SOF refs to include
+  const sofRefs = [];
+  if (totals.hasVoice) sofRefs.push('DAI-VOICE-001');
+  if (totals.hasReview) sofRefs.push('DAI-REVIEW-001');
+
+  const html = buildSOFHTML(c, totals, vPlan, rPlan, notes, today, refNum, sofRefs);
+  sofCurrentHTML = html;
+
+  const area = document.getElementById('sof-preview-area');
+  area.innerHTML = html;
+
+  const btns = document.getElementById('sof-action-btns');
+  if (btns) btns.style.display = 'flex';
+
+  showToast('SOF generated — review and send', 'success');
+}
+
+function buildSOFHTML(c, totals, vPlan, rPlan, notes, today, refNum, sofRefs) {
+  const styles = `
+    <style>
+      .sof-wrap{font-family:'DM Sans',sans-serif;font-size:13px;color:#111;line-height:1.65;max-width:720px;margin:0 auto}
+      .sof-header{text-align:center;border-bottom:3px solid #0a0a0a;padding-bottom:16px;margin-bottom:20px}
+      .sof-logo{font-size:20px;font-weight:800;letter-spacing:-0.5px;margin-bottom:4px}
+      .sof-logo span{color:#0066FF}
+      .sof-tagline{font-size:11px;color:#888;letter-spacing:0.06em;text-transform:uppercase}
+      .sof-title{font-size:16px;font-weight:800;margin:14px 0 4px;text-align:center}
+      .sof-ref{font-size:11px;color:#888;text-align:center;font-family:monospace}
+      .sof-meta{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;margin:16px 0}
+      .sof-meta-row{display:contents}
+      .sof-meta-label{background:#f8f8f8;padding:7px 12px;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:#666;border-bottom:1px solid #e0e0e0}
+      .sof-meta-val{padding:7px 12px;border-bottom:1px solid #e0e0e0;font-size:12px}
+      .sof-section{margin:20px 0}
+      .sof-section-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#0066FF;border-bottom:2px solid #0066FF;padding-bottom:4px;margin-bottom:12px}
+      .sof-service-block{background:#f8f9ff;border:1px solid #d4ddff;border-radius:8px;padding:14px 16px;margin-bottom:12px}
+      .sof-service-name{font-weight:800;font-size:14px;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+      .sof-service-ref{font-size:10px;font-family:monospace;background:#e8eeff;color:#0066FF;padding:2px 7px;border-radius:4px;font-weight:700}
+      .sof-service-detail{font-size:12px;color:#444;line-height:1.6}
+      .sof-bullet{padding-left:14px;margin:4px 0}
+      .sof-bullet li{margin-bottom:2px}
+      .sof-price-table{width:100%;border-collapse:collapse;margin:12px 0;border:1px solid #e0e0e0;border-radius:6px;overflow:hidden}
+      .sof-price-table th{background:#0a0a0a;color:#fff;padding:8px 12px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em}
+      .sof-price-table td{padding:9px 12px;border-bottom:1px solid #eee;font-size:12px}
+      .sof-price-table tr:last-child td{border-bottom:none;font-weight:700;background:#f8f8f8}
+      .sof-price-table .val{text-align:right;font-family:monospace;font-weight:600}
+      .sof-discount{color:#1a9c5b;font-weight:700}
+      .sof-total-row td{background:#f0f4ff !important;color:#0066FF;font-weight:800;font-size:13px}
+      .sof-terms{font-size:11px;color:#555;line-height:1.7}
+      .sof-sig-block{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px}
+      .sof-sig-party{border-top:2px solid #0a0a0a;padding-top:10px}
+      .sof-sig-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:16px}
+      .sof-sig-line{border-bottom:1px solid #bbb;margin-bottom:4px;height:32px}
+      .sof-sig-label{font-size:10px;color:#888}
+      .sof-footer{margin-top:20px;padding-top:12px;border-top:1px solid #e0e0e0;text-align:center;font-size:10px;color:#aaa}
+      @media print{.sof-wrap{font-size:11px}.sof-title{font-size:14px}}
+    </style>`;
+
+  const voiceServiceHTML = totals.hasVoice ? `
+    <div class="sof-service-block">
+      <div class="sof-service-name">📞 Alli — 24/7 AI Voice Agent <span class="sof-service-ref">DAI-VOICE-001</span></div>
+      <div class="sof-service-detail">
+        <ul class="sof-bullet">
+          <li>Answers every inbound call 24 hours a day, 7 days a week — no hold times, no voicemail</li>
+          <li>Custom-trained on Client's services, pricing, hours, and location</li>
+          <li>Natural conversational tone calibrated to Client's brand voice</li>
+          <li>Escalation handling — de-escalates frustrated callers before live transfer</li>
+          <li>Handles multiple simultaneous calls without quality degradation</li>
+          <li>Ongoing: monthly performance review and AI Agent optimization</li>
+        </ul>
+        <div style="margin-top:8px"><b>Plan Selected:</b> ${SOF_PRICES.voice[vPlan || 'monthly'].label}</div>
+      </div>
+    </div>` : '';
+
+  const reviewServiceHTML = totals.hasReview ? `
+    <div class="sof-service-block">
+      <div class="sof-service-name">⭐ Alli — Review Response AI Agent <span class="sof-service-ref">DAI-REVIEW-001</span></div>
+      <div class="sof-service-detail">
+        <ul class="sof-bullet">
+          <li>Monitors Google Business Profile and responds to every review within minutes</li>
+          <li>4 & 5 star path: warm personalized response + referral ask + staff alert email</li>
+          <li>1–3 star path: empathetic response + HappyGuest@ resolution loop + staff briefing</li>
+          <li>HappyGuest Resolution Loop: AI collects guest details, confirms follow-up within 24 hrs</li>
+          <li>No per-response approval required — Client retains full visibility via alert emails</li>
+          <li>Ongoing: monthly prompt optimization based on response performance</li>
+        </ul>
+        <div style="margin-top:8px"><b>Plan Selected:</b> ${SOF_PRICES.review[rPlan || 'monthly'].label}</div>
+      </div>
+    </div>` : '';
+
+  // Build price table rows
+  let priceRows = '';
+  if (totals.hasVoice) {
+    const vSetupSel = document.getElementById('sof-voice-setup')?.value;
+    const vSetup = vSetupSel === '0' ? 0 : vSetupSel === 'custom'
+      ? (parseFloat(document.getElementById('sof-voice-setup-custom')?.value) || 0) : 1497;
+    const vp = SOF_PRICES.voice[vPlan || 'monthly'];
+    priceRows += `<tr><td>Alli Voice Agent — ${vp.label}</td><td class="val">$${vSetup.toLocaleString()}</td><td class="val">$${vp.amount.toLocaleString()}${vp.period}</td></tr>`;
+  }
+  if (totals.hasReview) {
+    const rSetupSel = document.getElementById('sof-review-setup')?.value;
+    const rSetup = rSetupSel === '0' ? 0 : rSetupSel === 'custom'
+      ? (parseFloat(document.getElementById('sof-review-setup-custom')?.value) || 0) : 997;
+    const rp = SOF_PRICES.review[rPlan || 'monthly'];
+    priceRows += `<tr><td>Alli Review Agent — ${rp.label}</td><td class="val">$${rSetup.toLocaleString()}</td><td class="val">$${rp.amount.toLocaleString()}${rp.period}</td></tr>`;
+  }
+  if (totals.discountAmt > 0) {
+    priceRows += `<tr><td class="sof-discount">🎁 ${totals.discountLabel}</td><td class="val sof-discount">−$${totals.discountAmt.toLocaleString()}</td><td class="val">—</td></tr>`;
+  }
+  priceRows += `<tr class="sof-total-row"><td><b>TOTAL DUE AT SIGNING</b></td><td class="val"><b>$${totals.setupTotal.toLocaleString()}</b></td><td class="val"><b>$${totals.recurringTotal.toLocaleString()}${totals.recurringPeriod}</b></td></tr>`;
+
+  const clientResps = totals.hasVoice
+    ? '<li>Forward main business line to the Alli number provided by Drivyn AI</li><li>Provide accurate service menu, pricing, and hours for the knowledge base</li>'
+    : '';
+  const clientRespsReview = totals.hasReview
+    ? '<li>Create HappyGuest@[yourdomain].com and designate one staff member to monitor it</li><li>Grant Drivyn AI access to Google Business Profile</li><li>Designate one staff member to receive negative review briefing emails</li>'
+    : '';
+
+  return `${styles}
+  <div class="sof-wrap">
+    <div class="sof-header">
+      <div class="sof-logo">Drivyn<span>AI</span></div>
+      <div class="sof-tagline">Service Order Form</div>
+    </div>
+    <div class="sof-title">SERVICE ORDER FORM — ${sofRefs.join(' + ')}</div>
+    <div class="sof-ref">REF: ${refNum} &nbsp;·&nbsp; ${today}</div>
+
+    <div class="sof-meta">
+      <div class="sof-meta-label">CLIENT</div><div class="sof-meta-val"><b>${c.name}</b>${c.owner ? ' · ' + c.owner : ''}</div>
+      <div class="sof-meta-label">EMAIL</div><div class="sof-meta-val">${c.email || '—'}</div>
+      <div class="sof-meta-label">PHONE</div><div class="sof-meta-val">${c.phone || '—'}</div>
+      <div class="sof-meta-label">ADDRESS</div><div class="sof-meta-val">${c.serviceArea || '—'}</div>
+      <div class="sof-meta-label">PROVIDER</div><div class="sof-meta-val"><b>Drivyn AI</b> · Ryan Whitfield, CEO</div>
+      <div class="sof-meta-label">PROVIDER EMAIL</div><div class="sof-meta-val">ryan@getdrivynai.com</div>
+    </div>
+
+    <div class="sof-section">
+      <div class="sof-section-title">1. Overview</div>
+      <p>This Service Order Form ("SOF") governs the delivery of Drivyn AI services to <b>${c.name}</b> ("Client"). This document is entered into between ${c.name} and Drivyn AI ("Provider") and becomes effective upon signature by both parties. Services commence on the go-live date confirmed by Drivyn AI after setup completion.</p>
+    </div>
+
+    <div class="sof-section">
+      <div class="sof-section-title">2. Services Included</div>
+      ${voiceServiceHTML}
+      ${reviewServiceHTML}
+    </div>
+
+    <div class="sof-section">
+      <div class="sof-section-title">3. Pricing & Payment Terms</div>
+      <table class="sof-price-table">
+        <thead><tr><th>Service</th><th>Setup Fee</th><th>Recurring</th></tr></thead>
+        <tbody>${priceRows}</tbody>
+      </table>
+      <p class="sof-terms">Setup fee is due upon signing. Recurring billing begins on go-live date. Payment accepted via ACH, credit card, or check. Invoices due within 7 days of receipt.</p>
+    </div>
+
+    <div class="sof-section">
+      <div class="sof-section-title">4. Term & Cancellation</div>
+      <p class="sof-terms"><b>Monthly Plan:</b> No minimum commitment. Cancel with 30 days written notice to ryan@getdrivynai.com.<br>
+      <b>Annual Plan:</b> Billed in full at signing. Cancel after 90 days with 30 days written notice. No refund for unused months.</p>
+    </div>
+
+    <div class="sof-section">
+      <div class="sof-section-title">5. Client Responsibilities</div>
+      <ul class="sof-bullet sof-terms">
+        ${clientResps}${clientRespsReview}
+        <li>Notify Drivyn AI of material changes to services, pricing, or hours within 5 business days</li>
+        <li>Designate a primary internal contact for communications with Drivyn AI</li>
+      </ul>
+    </div>
+
+    <div class="sof-section">
+      <div class="sof-section-title">6. Intellectual Property</div>
+      <p class="sof-terms">All AI Agent prompts, workflows, and system architecture developed by Drivyn AI remain the intellectual property of Drivyn AI. Knowledge base content derived from Client's operational data remains the property of Client. Upon termination, Drivyn AI will deactivate all services and provide Client with their content upon request.</p>
+    </div>
+
+    <div class="sof-section">
+      <div class="sof-section-title">7. Limitation of Liability</div>
+      <p class="sof-terms">Drivyn AI's total liability shall not exceed fees paid by Client in the three months preceding the claim. Drivyn AI is not liable for service interruptions caused by third-party providers (telephony, Google API, etc.) or revenue loss resulting from system downtime.</p>
+    </div>
+
+    <div class="sof-section">
+      <div class="sof-section-title">8. Confidentiality</div>
+      <p class="sof-terms">Both parties agree to keep the terms of this SOF and all proprietary business information shared during the engagement confidential. This obligation survives termination for two years.</p>
+    </div>
+
+    ${notes ? `<div class="sof-section"><div class="sof-section-title">9. Special Terms & Notes</div><p class="sof-terms">${notes}</p></div>` : ''}
+
+    <div class="sof-section">
+      <div class="sof-section-title">${notes ? '10' : '9'}. Signature & Acceptance</div>
+      <p class="sof-terms">By signing below, both parties agree to the terms of this Service Order Form.${totals.hasReview ? ' Client acknowledges that review responses will be posted to Google Business Profile automatically without prior per-response approval.' : ''}</p>
+      <div class="sof-sig-block">
+        <div class="sof-sig-party">
+          <div class="sof-sig-title">Client</div>
+          <div class="sof-sig-line"></div><div class="sof-sig-label">Signature &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Date</div>
+          <br>
+          <div class="sof-sig-line" style="margin-top:20px"></div><div class="sof-sig-label">Printed Name</div>
+          <br>
+          <div class="sof-sig-line" style="margin-top:20px"></div><div class="sof-sig-label">Title</div>
+        </div>
+        <div class="sof-sig-party">
+          <div class="sof-sig-title">Drivyn AI</div>
+          <div class="sof-sig-line"></div><div class="sof-sig-label">Signature &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Date</div>
+          <br>
+          <div style="margin-top:20px;padding-top:8px;border-top:1px solid #bbb;font-size:12px"><b>Ryan Whitfield</b></div>
+          <div class="sof-sig-label">CEO, Drivyn AI</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sof-footer">
+      Drivyn AI &nbsp;·&nbsp; ryan@getdrivynai.com &nbsp;·&nbsp; getdrivynai.com &nbsp;·&nbsp; Ref: ${refNum}
+    </div>
+  </div>`;
+}
+
+// ─── PRINT SOF ───
+function printSOF() {
+  if (!sofCurrentHTML) { showToast('Generate a SOF first', 'error'); return; }
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html><html><head><title>SOF — Drivyn AI</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>body{margin:40px;background:#fff;}</style></head>
+    <body>${sofCurrentHTML}<script>window.onload=()=>{window.print();}<\/script></body></html>`);
+  win.document.close();
+}
+
+// ─── SEND SOF ───
+function sendSOF() {
+  const clientId = document.getElementById('sof-client').value;
+  if (!sofCurrentHTML || !clientId) { showToast('Generate a SOF first', 'error'); return; }
+  const c = state.clients.find(cl => cl.id === clientId);
+  if (!c) return;
+  if (!c.email) { showToast('No email on file for this client', 'error'); return; }
+
+  if (!state.sofHistory) state.sofHistory = [];
+  const entry = {
+    id: uid(),
+    clientId,
+    clientName: c.name,
+    email: c.email,
+    date: now(),
+    services: [
+      document.getElementById('sof-voice')?.checked ? 'Voice Agent' : null,
+      document.getElementById('sof-review')?.checked ? 'Review Agent' : null,
+    ].filter(Boolean).join(' + '),
+    setup: document.getElementById('sof-total-setup')?.textContent,
+    recurring: document.getElementById('sof-total-recurring')?.textContent,
+  };
+  state.sofHistory.push(entry);
+  logActivity(clientId, `SOF sent to ${c.email} — ${entry.services}`, 'var(--accent)');
+  saveState();
+  renderSofHistory();
+  showToast(`SOF sent to ${c.email}`, 'success');
+  // Real email would trigger via Make.com webhook or Mailgun here
+}
+
+// ─── SOF HISTORY ───
+function renderSofHistory() {
+  const el = document.getElementById('sof-history-list');
+  if (!el) return;
+  if (!state.sofHistory || !state.sofHistory.length) {
+    el.innerHTML = '<div style="padding:16px;font-size:0.82rem;color:var(--muted)">No SOFs sent yet.</div>';
+    return;
+  }
+  const sorted = [...state.sofHistory].sort((a,b) => new Date(b.date)-new Date(a.date));
+  el.innerHTML = `<table><thead><tr><th>Client</th><th>Services</th><th>Setup</th><th>Recurring</th><th>Date</th></tr></thead>
+  <tbody>${sorted.map(s => `<tr>
+    <td class="td-primary">${s.clientName}</td>
+    <td style="font-size:0.78rem">${s.services}</td>
+    <td class="td-mono">${s.setup}</td>
+    <td class="td-mono">${s.recurring}</td>
+    <td class="td-mono" style="font-size:0.75rem">${fmtDate(s.date)}</td>
+  </tr>`).join('')}</tbody></table>`;
+}
+
+// Hook SOF into renderAll
+const _origRenderAllPre = renderAll;
+function renderAll() {
+  _origRenderAllPre();
+  populateSofClient();
+  renderSofHistory();
+  // Also update report client select for restaurant vertical
+  const rsel = document.getElementById('report-client-select');
+  if (rsel && !rsel.querySelector('option[value=""]')) {
+    rsel.innerHTML = '<option value="">— Select a client —</option>' +
+      state.clients.filter(c=>c.status!=='Churned').map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  }
 }
