@@ -303,15 +303,179 @@ function renderClientDetail(id) {
   if (!el) return;
   const score = calcHealth(c);
   const days = pilotDaysLeft(c);
-  const clientInvoices = state.invoices.filter(i=>i.clientId===id);
   const clientReports = state.reports.filter(r=>r.clientId===id);
   const clientActivity = (state.activity||[]).filter(a=>a.clientId===id).slice(-20).reverse();
   const clientWins = (state.wins||[]).filter(w=>w.clientId===id);
   const clientComms = (state.comms||[]).filter(cm=>cm.clientId===id).slice(-10).reverse();
-  const totalRecovered = clientReports.reduce((s,r) => s+(parseFloat(r.data?.w1?.revenue)||0)+(parseFloat(r.data?.w2?.revenue)||0)+(parseFloat(r.data?.w3?.revenue)||0),0);
+  const totalRecovered = clientReports.reduce((s,r)=>s+(parseFloat(r.data?.w1?.revenue)||0)+(parseFloat(r.data?.w2?.revenue)||0)+(parseFloat(r.data?.w3?.revenue)||0),0);
   const stages = ['kickoff','build','approval','live','optimized'];
   const stageLabels = ['Kickoff','Build','Approval','Live','Optimized'];
   const stageIdx = stages.indexOf(c.onboardingStage||'kickoff');
+
+  // ── SYSTEM HEALTH CHECK ──
+  const sysHealth = calcSystemHealth(c);
+
+  el.innerHTML = `
+  <div class="page-header">
+    <div class="page-header-left">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" onclick="showView('clients',document.querySelector('[data-view=clients]'))">← Back</button>
+        <h2>${c.name}</h2>
+        ${statusBadge(c.status)}
+        ${isChurnRisk(c)?'<span class="badge badge-risk">⚠ Churn Risk</span>':''}
+        ${sysHealth.criticalCount > 0 ? `<span class="badge badge-risk">🔴 ${sysHealth.criticalCount} offline</span>` : sysHealth.warnCount > 0 ? `<span class="badge badge-warning">⚠ ${sysHealth.warnCount} warning</span>` : '<span class="badge badge-active">✓ All systems go</span>'}
+      </div>
+      <p>${c.market||''} · ${c.subindustry||''} · ${c.email||''} · ${c.phone||''}</p>
+    </div>
+    <div class="page-header-right">
+      <button class="btn btn-ghost btn-sm" onclick="openEditClient('${c.id}')">Edit Client</button>
+      <button class="btn btn-primary btn-sm" onclick="openReportForClient('${c.id}')">Send Report</button>
+    </div>
+  </div>
+
+  <!-- ── SYSTEM HEALTH BANNER ── -->
+  ${renderSystemHealthBanner(c, sysHealth)}
+
+  <div class="detail-grid">
+    <div class="detail-main">
+
+      <!-- ONBOARDING -->
+      <div class="card mb-16">
+        <div class="card-header">
+          <div class="card-header-left">
+            <div class="card-title">Onboarding Progress</div>
+            <div class="card-subtitle">${stageLabels[stageIdx]} — Stage ${stageIdx+1} of 5</div>
+          </div>
+          ${stageIdx < 4 ? `<button class="btn btn-primary btn-sm" onclick="advanceStage('${c.id}')">Advance Stage →</button>` : '<span class="badge badge-active">Complete ✓</span>'}
+        </div>
+        <div class="card-body">
+          <div style="display:flex;align-items:center;width:100%;margin-bottom:10px">
+            ${stages.map((s,i) => `
+              <div style="display:flex;align-items:center;flex:${i<stages.length-1?'1':'0'}">
+                <div class="onboarding-dot ${i<=stageIdx?'done':''} ${i===stageIdx?'current':''}" title="${stageLabels[i]}" style="flex-shrink:0">${i<stageIdx?'✓':(i+1)}</div>
+                ${i<stages.length-1?`<div class="onboarding-line ${i<stageIdx?'done':''}" style="flex:1;min-width:40px"></div>`:''}
+              </div>`).join('')}
+          </div>
+          <div style="display:flex;justify-content:space-between;width:100%">
+            ${stageLabels.map(l=>`<span style="font-size:0.68rem;color:var(--muted);text-align:center;flex:1">${l}</span>`).join('')}
+          </div>
+        </div>
+      </div>
+
+      <!-- VOICE INTELLIGENCE SETUP CHECKLIST -->
+      ${c.w1 ? renderVoiceSetupChecklist(c) : ''}
+
+      <!-- WIN-BACK SETUP CHECKLIST -->
+      ${c.w2 ? renderWinBackSetupChecklist(c) : ''}
+
+      <!-- GOOGLE REVIEW SETUP CHECKLIST -->
+      ${c.w3 ? renderGBPSetup(c) : ''}
+
+      <!-- BOOKING SETUP -->
+      <div data-booking-marker id="booking-marker-${c.id}">${renderBookingCard(c)}</div>
+
+      <!-- REPORTS -->
+      <div class="card mb-16">
+        <div class="card-header">
+          <div class="card-title">Reports (${clientReports.length})</div>
+          <button class="btn btn-primary btn-sm" onclick="openReportForClient('${c.id}')">+ Send Report</button>
+        </div>
+        ${clientReports.length ? `<table><thead><tr><th>Date</th><th>W1 Revenue</th><th>W2 Bookings</th><th>W3 Reviews</th><th></th></tr></thead><tbody>${clientReports.slice().reverse().map(r=>`<tr>
+          <td class="td-mono">${fmtDate(r.date)}</td>
+          <td>${r.data?.w1?.revenue?fmtMoney(r.data.w1.revenue):'—'}</td>
+          <td>${r.data?.w2?.booked||'—'}</td>
+          <td>${r.data?.w3?.collected||'—'}</td>
+          <td><button class="btn btn-ghost btn-xs" onclick="viewReport('${r.id}')">View</button></td>
+        </tr>`).join('')}</tbody></table>` : emptyState('📊','No reports yet','Send the first monthly report.')}
+      </div>
+
+      <!-- BILLING -->
+      <div class="card mb-16">
+        <div class="card-header">
+          <div class="card-title">Billing & Payment</div>
+          <div style="display:flex;gap:8px">
+            ${c.zohoUrl?`<a href="${c.zohoUrl}" target="_blank" class="btn btn-black btn-sm">Open Zoho ↗</a>`:`<button class="btn btn-ghost btn-sm" onclick="openEditClient('${c.id}')">Add Zoho URL</button>`}
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="detail-info-row"><div class="detail-info-label">Monthly Fee</div><div class="detail-info-val td-mono">${fmtMoney(c.monthly)}/mo</div></div>
+          <div class="detail-info-row"><div class="detail-info-label">Setup Fee</div><div class="detail-info-val td-mono">${fmtMoney(c.setup)}</div></div>
+          <div class="detail-info-row"><div class="detail-info-label">Payment Status</div><div class="detail-info-val">${payBadge(c.payStatus||'Unpaid')}</div></div>
+          <div style="display:flex;gap:8px;margin-top:14px">
+            <button class="btn btn-success btn-sm" onclick="updatePayStatus('${c.id}','Paid')">Mark Paid</button>
+            <button class="btn btn-danger btn-sm" onclick="updatePayStatus('${c.id}','Overdue')">Mark Overdue</button>
+            <button class="btn btn-ghost btn-sm" onclick="updatePayStatus('${c.id}','Unpaid')">Reset</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- COMM LOG -->
+      <div class="card mb-16">
+        <div class="card-header">
+          <div class="card-title">Communication Log</div>
+          <button class="btn btn-ghost btn-sm" onclick="openAddComm('${c.id}')">+ Log Note</button>
+        </div>
+        <div class="card-body">
+          ${clientComms.length ? clientComms.map(cm=>`<div class="activity-item"><div class="activity-dot" style="background:var(--accent)"></div><div class="activity-content"><div class="activity-text">${cm.note}</div><div class="activity-time">${fmtTime(cm.date)} · ${cm.type}</div></div></div>`).join('') : '<div class="text-muted text-small">No communications logged yet.</div>'}
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT SIDEBAR -->
+    <div class="detail-sidebar">
+
+      <!-- HEALTH SCORE -->
+      <div class="card mb-16">
+        <div class="card-header"><div class="card-title">Health Score</div>${healthBadge(score)}</div>
+        <div class="card-body" style="text-align:center;padding:24px">
+          <div style="font-size:3rem;font-weight:800;letter-spacing:-2px;color:${score>=70?'var(--green)':score>=40?'var(--amber)':'var(--red)'}">${score}</div>
+          <div class="health-bar" style="margin:12px 0;height:8px"><div class="health-bar-fill ${healthClass(score)}" style="width:${score}%"></div></div>
+          <div class="text-small text-muted">Auto-calculated from invoices, reports, onboarding, APIs, and setup checklists</div>
+        </div>
+      </div>
+
+      <!-- PILOT COUNTDOWN -->
+      ${c.status==='Pilot'?`<div class="card mb-16 ${days!==null&&days<=7?'stat-card-red':days!==null&&days<=14?'stat-card-amber':'stat-card-accent'}">
+        <div class="card-body" style="text-align:center;padding:20px">
+          <div class="stat-label">Pilot Days Remaining</div>
+          <div style="font-size:2.5rem;font-weight:800;letter-spacing:-1px;color:${days!==null&&days<=7?'var(--red)':days!==null&&days<=14?'var(--amber)':'var(--accent)'}">${days===null?'—':days<0?'Expired':days}</div>
+          <div class="text-small text-muted" style="margin-top:6px">${c.pilotDate?'Started '+fmtDate(c.pilotDate):''}</div>
+          ${days!==null&&days<=14?`<div style="margin-top:12px"><button class="btn btn-primary btn-sm w-full" onclick="prepConversionCall('${c.id}')">Prepare Conversion Call</button></div>`:''}
+        </div>
+      </div>`:''}
+
+      <!-- REVENUE RECOVERED -->
+      <div class="card mb-16">
+        <div class="card-header"><div class="card-title">Revenue Recovered</div></div>
+        <div class="revenue-total">
+          <div class="revenue-total-num">${fmtMoney(totalRecovered)}</div>
+          <div class="revenue-total-label">Total across all reports</div>
+        </div>
+      </div>
+
+      <!-- SMB PROFILE SUMMARY -->
+      ${renderSMBProfile(c)}
+
+      <!-- QUICK WINS -->
+      <div class="card mb-16">
+        <div class="card-header"><div class="card-title">Quick Wins</div><button class="btn btn-ghost btn-xs" onclick="openAddWin('${c.id}')">+ Add</button></div>
+        <div class="card-body">
+          ${clientWins.length ? clientWins.slice().reverse().map(w=>`<div class="win-item"><div class="win-icon">⭐</div><div><div class="win-text">${w.text}</div><div class="win-date">${fmtDate(w.date)}</div></div></div>`).join('') : '<div class="text-muted text-small">No wins recorded yet.</div>'}
+        </div>
+      </div>
+
+      <!-- ACTIVITY LOG -->
+      <div class="card">
+        <div class="card-header"><div class="card-title">Activity Log</div></div>
+        <div class="card-body">
+          ${clientActivity.length ? clientActivity.map(a=>`<div class="activity-item"><div class="activity-dot" style="background:${a.color||'var(--muted)'}"></div><div class="activity-content"><div class="activity-text">${a.text}</div><div class="activity-time">${fmtTime(a.date)}</div></div></div>`).join('') : '<div class="text-muted text-small">No activity yet.</div>'}
+        </div>
+      </div>
+
+    </div>
+  </div>`;
+}
 
   el.innerHTML = `
   <div class="page-header">
@@ -568,6 +732,7 @@ function openEditClient(id) {
 
 function clearClientForm() {
   ['c-name','c-owner','c-email','c-phone','c-website','c-notes','c-monthly','c-setup','c-pilot-date','c-next-invoice','c-zoho-url','c-score-before','c-reviews-before','c-score-current','c-reviews-current','c-subindustry','c-services','c-service-area','c-avg-value','c-emergency-line'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  const posEl = document.getElementById('c-pos'); if(posEl) posEl.value = '';
   document.getElementById('c-market').value = 'Professional Services';
   document.getElementById('c-status').value = 'Pilot';
   document.getElementById('c-pay-status').value = 'Unpaid';
@@ -588,6 +753,7 @@ function fillClientForm(c) {
   set('c-service-area', c.serviceArea); set('c-avg-value', c.avgValue);
   set('c-emergency-line', c.emergencyLine);
   document.getElementById('c-qualify').value = c.qualify || 'no';
+  const posEl = document.getElementById('c-pos'); if(posEl) posEl.value = c.pos || '';
   document.getElementById('c-market').value = c.market || 'Professional Services';
   document.getElementById('c-status').value = c.status || 'Pilot';
   document.getElementById('c-pay-status').value = c.payStatus || 'Unpaid';
@@ -617,6 +783,7 @@ function saveClient() {
     notes: document.getElementById('c-notes').value.trim(),
     onboardingStage: document.getElementById('c-onboarding').value,
     zohoUrl: document.getElementById('c-zoho-url')?.value.trim(),
+    pos: document.getElementById('c-pos')?.value || '',
     scoreBefore: document.getElementById('c-score-before')?.value,
     reviewsBefore: document.getElementById('c-reviews-before')?.value,
     scoreCurrent: document.getElementById('c-score-current')?.value,
@@ -1991,5 +2158,581 @@ function toggleGBPStep(clientId, stepId, checked) {
   saveState();
   // Re-render detail without full page reload
   if (state.currentClientId === clientId) renderClientDetail(clientId);
+  showToast(checked ? 'Step marked complete' : 'Step unchecked', checked?'success':'info');
+}
+
+// ═══════════════════════════════════════════
+// BOOKING SETUP — CALENDAR / URL MANAGEMENT
+// ═══════════════════════════════════════════
+
+const BOOKING_HINTS = {
+  existing: 'Client uses Vagaro, Mindbody, Square, etc. Get their existing customer-facing link. Zero double-booking risk — customer books directly in their live system.',
+  calendly: 'Client sets up Calendly/Cal.com and connects their Google Calendar. Make sure their booking software syncs to Google Calendar first to prevent double-booking.',
+  buffer: 'For salons/businesses with no digital booking. Customer picks a time block. Staff confirms exact time via SMS within 2 hours. Use until client upgrades to software.',
+  phone: 'VAPI captures lead info and tells caller someone will call back within 30 min to confirm the appointment. Staff makes the call.',
+};
+
+const GCAL_SYNC_NEEDED = ['vagaro','mindbody','square','jane','acuity','jobber','servicetitan','housecall','toast'];
+
+function onBookingTypeChange() {
+  const type = document.getElementById('c-booking-type').value;
+  const hint = document.getElementById('booking-type-hint');
+  const urlWrap = document.getElementById('booking-url-wrap');
+  const softWrap = document.getElementById('booking-software-wrap');
+  const buffWrap = document.getElementById('booking-buffer-wrap');
+  const gcalWarn = document.getElementById('booking-gcal-warn');
+
+  if (hint) hint.textContent = BOOKING_HINTS[type] || '';
+  if (urlWrap) urlWrap.style.display = (type === 'buffer' || type === 'phone') ? 'none' : 'block';
+  if (softWrap) softWrap.style.display = type === 'existing' ? 'block' : 'none';
+  if (buffWrap) buffWrap.style.display = type === 'buffer' ? 'block' : 'none';
+  if (gcalWarn) gcalWarn.style.display = type === 'existing' ? 'block' : 'none';
+
+  // Update URL placeholder
+  const urlInput = document.getElementById('c-booking-url');
+  if (urlInput) {
+    const placeholders = {
+      existing: 'vagaro.com/gracespa or booksy.com/your-salon',
+      calendly: 'calendly.com/yourname/service or cal.com/yourname',
+    };
+    urlInput.placeholder = placeholders[type] || 'https://...';
+  }
+}
+
+function onBookingSoftwareChange() {
+  const sw = document.getElementById('c-booking-software')?.value;
+  const gcalWarn = document.getElementById('booking-gcal-warn');
+  if (gcalWarn) {
+    gcalWarn.style.display = GCAL_SYNC_NEEDED.includes(sw) ? 'block' : 'none';
+  }
+}
+
+// ─── BOOKING FIELDS IN SAVE/FILL ───
+// These are appended to the existing save/fill functions via the state fields
+
+function getBookingFields() {
+  return {
+    bookingType: document.getElementById('c-booking-type')?.value || '',
+    bookingUrl: document.getElementById('c-booking-url')?.value?.trim() || '',
+    bookingSoftware: document.getElementById('c-booking-software')?.value || '',
+    bookingBuffer: document.getElementById('c-booking-buffer')?.value || 'morning',
+    bookingSmsDelay: document.getElementById('c-booking-sms-delay')?.value || '30',
+    bookingReminder: document.getElementById('c-booking-reminder')?.value || '24h',
+  };
+}
+
+function fillBookingFields(c) {
+  const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+  setVal('c-booking-type', c.bookingType);
+  setVal('c-booking-url', c.bookingUrl);
+  setVal('c-booking-software', c.bookingSoftware);
+  setVal('c-booking-buffer', c.bookingBuffer || 'morning');
+  setVal('c-booking-sms-delay', c.bookingSmsDelay || '30');
+  setVal('c-booking-reminder', c.bookingReminder || '24h');
+  if (c.bookingType) onBookingTypeChange();
+}
+
+// ─── BOOKING STATUS CARD — CLIENT DETAIL ───
+function renderBookingCard(c) {
+  const type = c.bookingType;
+  if (!type) return `
+    <div class="card mb-16">
+      <div class="card-header">
+        <div class="card-title">📅 Booking Setup</div>
+        <button class="btn btn-primary btn-sm" onclick="openEditClient('${c.id}')">Configure →</button>
+      </div>
+      <div style="padding:16px">
+        <div style="display:flex;gap:10px;align-items:flex-start;padding:12px;background:var(--amber-light);border:1px solid var(--amber-mid);border-radius:var(--radius-sm)">
+          <span style="font-size:1.1rem">⚠️</span>
+          <div>
+            <div style="font-size:0.85rem;font-weight:700;color:var(--amber)">Booking not configured</div>
+            <div style="font-size:0.78rem;color:var(--muted);margin-top:2px">VAPI cannot send a booking link until this is set up. Configure before going live.</div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  const typeLabels = {
+    existing: '🔗 Existing booking software link',
+    calendly: '📆 Calendly / Cal.com',
+    buffer: '🕐 Buffer blocks — manual confirmation',
+    phone: '📞 Phone callback — VAPI captures then staff calls',
+  };
+
+  const statusColor = c.bookingUrl || type === 'phone' || type === 'buffer' ? 'var(--green)' : 'var(--amber)';
+  const statusText = c.bookingUrl ? 'Ready' : (type === 'phone' || type === 'buffer') ? 'Configured' : 'URL missing';
+
+  const softwareMap = {
+    vagaro:'Vagaro', mindbody:'Mindbody', square:'Square Appointments',
+    jane:'Jane App', acuity:'Acuity', jobber:'Jobber',
+    servicetitan:'ServiceTitan', housecall:'Housecall Pro',
+    toast:'Toast', opentable:'OpenTable/Resy', clio:'Clio', other:'Other',
+  };
+
+  const gcalNeeded = type === 'existing' && GCAL_SYNC_NEEDED.includes(c.bookingSoftware);
+  const vapiScript = generateVAPIBookingScript(c);
+
+  return `
+  <div class="card mb-16">
+    <div class="card-header">
+      <div class="card-header-left">
+        <div class="card-title">📅 Booking Setup</div>
+        <div class="card-subtitle">${typeLabels[type] || type}</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span style="font-size:0.72rem;font-weight:700;color:${statusColor}">${statusText}</span>
+        <button class="btn btn-ghost btn-sm" onclick="openEditClient('${c.id}')">Edit</button>
+      </div>
+    </div>
+    <div class="card-body">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div style="padding:10px 12px;background:var(--surface2);border-radius:var(--radius-sm)">
+          <div style="font-size:0.65rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:4px">Method</div>
+          <div style="font-size:0.85rem;font-weight:600">${typeLabels[type]||'—'}</div>
+        </div>
+        ${c.bookingSoftware ? `<div style="padding:10px 12px;background:var(--surface2);border-radius:var(--radius-sm)">
+          <div style="font-size:0.65rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:4px">Software</div>
+          <div style="font-size:0.85rem;font-weight:600">${softwareMap[c.bookingSoftware]||c.bookingSoftware}</div>
+        </div>` : ''}
+        <div style="padding:10px 12px;background:var(--surface2);border-radius:var(--radius-sm)">
+          <div style="font-size:0.65rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:4px">SMS Timing</div>
+          <div style="font-size:0.85rem;font-weight:600">${c.bookingSmsDelay==='immediate'?'During call':c.bookingSmsDelay+' sec after call'}</div>
+        </div>
+        <div style="padding:10px 12px;background:var(--surface2);border-radius:var(--radius-sm)">
+          <div style="font-size:0.65rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:4px">Reminders</div>
+          <div style="font-size:0.85rem;font-weight:600">${{none:'Software handles','24h':'24 hrs before','24h_2h':'24 hrs + 2 hrs'}[c.bookingReminder]||c.bookingReminder||'—'}</div>
+        </div>
+      </div>
+
+      ${c.bookingUrl ? `
+      <div style="margin-bottom:14px">
+        <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:5px">Booking URL</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <code style="flex:1;padding:8px 10px;background:var(--surface2);border-radius:var(--radius-sm);font-size:0.78rem;word-break:break-all;color:var(--accent)">${c.bookingUrl}</code>
+          <a href="${c.bookingUrl.startsWith('http')?c.bookingUrl:'https://'+c.bookingUrl}" target="_blank" class="btn btn-ghost btn-sm">Test →</a>
+        </div>
+      </div>` : ''}
+
+      ${gcalNeeded ? `
+      <div style="padding:10px 12px;background:var(--amber-light);border:1px solid var(--amber-mid);border-radius:var(--radius-sm);margin-bottom:14px;font-size:0.78rem;color:var(--amber)">
+        ⚠️ <strong>Google Calendar sync required</strong> — Ask client to connect ${softwareMap[c.bookingSoftware]||'their booking software'} to Google Calendar. Prevents double-booking.
+        <a href="https://support.google.com/calendar" target="_blank" style="color:var(--accent);font-weight:600;margin-left:6px">Setup guide →</a>
+      </div>` : ''}
+
+      <!-- VAPI Script Template -->
+      <div>
+        <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:6px">VAPI Booking Script</div>
+        <div style="padding:12px 14px;background:var(--black);border-radius:var(--radius-sm);font-size:0.8rem;color:rgba(255,255,255,0.8);line-height:1.7;font-style:italic;position:relative">
+          "${vapiScript}"
+          <button onclick="copyText('${vapiScript.replace(/'/g,"\\'")}','vapi-copy-${c.id}')" class="btn btn-ghost btn-xs" style="position:absolute;top:8px;right:8px;font-style:normal" id="vapi-copy-${c.id}">Copy</button>
+        </div>
+        <div style="margin-top:6px;font-size:0.72rem;color:var(--muted)">Paste this into VAPI assistant prompt for this client's booking flow.</div>
+      </div>
+
+    </div>
+  </div>`;
+}
+
+// ─── VAPI SCRIPT GENERATOR ───
+function generateVAPIBookingScript(c) {
+  const name = c.name || 'the business';
+  const url = c.bookingUrl || '[BOOKING URL]';
+  const delay = c.bookingSmsDelay;
+
+  const scripts = {
+    existing: {
+      immediate: `Great — I'm going to send you a link right now to book your appointment at ${name}. You'll be able to pick the exact time that works for you. Look for a text from us in just a moment.`,
+      '30': `Perfect. I'll send you a text with the booking link in about 30 seconds — you can pick your time directly. Does ${url} look familiar? That's where you'll book.`,
+      '60': `I'll send you a text in just a minute with the link to book your time at ${name}. Look for it on your phone — it takes less than two minutes to confirm your spot.`,
+    },
+    calendly: {
+      immediate: `I'm sending you a scheduling link right now. You'll see available times and can pick what works best for you — no waiting. Look for the text in a moment.`,
+      '30': `I'll text you a link in about 30 seconds to pick your appointment time. Booking takes about a minute and you'll get a confirmation automatically.`,
+      '60': `You'll receive a text from us shortly with a link to schedule. Go ahead and pick your preferred time — you'll get an instant confirmation once you book.`,
+    },
+    buffer: {
+      any: `I can get you scheduled. We have morning slots — that's 9am to noon — and afternoon slots from 1pm to 5pm. Which works better for you? ... Great. I'll have someone from ${name} text you within 2 hours to confirm your exact time.`,
+    },
+    phone: {
+      any: `I've captured all your information. Someone from ${name} will call you back within 30 minutes to confirm your appointment time. What's the best number to reach you?`,
+    },
+  };
+
+  const type = c.bookingType || 'existing';
+  if (type === 'buffer' || type === 'phone') return scripts[type]?.any || '';
+  return scripts[type]?.[delay] || scripts[type]?.['30'] || '';
+}
+
+// ─── COPY HELPER ───
+function copyText(text, btnId) {
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById(btnId);
+    if (btn) { btn.textContent = 'Copied ✓'; setTimeout(()=>{ btn.textContent = 'Copy'; }, 2000); }
+  });
+}
+
+// ─── PATCH SAVE CLIENT TO INCLUDE BOOKING FIELDS ───
+const _origSaveClient = saveClient;
+function saveClient() {
+  // Inject booking fields into the save process
+  const booking = getBookingFields();
+  // Store temporarily so the original saveClient picks them up via data object patch
+  window._pendingBooking = booking;
+  _origSaveClient();
+}
+
+// ─── PATCH FILL CLIENT FORM ───
+const _origFillClientForm = fillClientForm;
+function fillClientForm(c) {
+  _origFillClientForm(c);
+  fillBookingFields(c);
+}
+
+// ─── PATCH CLEAR CLIENT FORM ───
+const _origClearClientForm = clearClientForm;
+function clearClientForm() {
+  _origClearClientForm();
+  ['c-booking-type','c-booking-url','c-booking-software','c-booking-buffer','c-booking-sms-delay','c-booking-reminder']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.value = id === 'c-booking-sms-delay' ? '30' : id === 'c-booking-reminder' ? '24h' : id === 'c-booking-buffer' ? 'morning' : ''; });
+  onBookingTypeChange();
+}
+
+// ─── WIRE BOOKING CARD INTO CLIENT DETAIL ───
+// Override renderClientDetail to inject booking card
+const _origRenderClientDetail = renderClientDetail;
+function renderClientDetail(id) {
+  _origRenderClientDetail(id);
+  // After render, inject booking card before the reports section
+  const c = state.clients.find(cl => cl.id === id);
+  if (!c) return;
+  // Find the reports card and inject booking card before it
+  const detail = document.getElementById('view-detail');
+  if (!detail) return;
+  // Add booking card to sidebar right panel after Revenue Recovered
+  const bookingCard = renderBookingCard(c);
+  // Inject after the wedge creds section using a marker div
+  const marker = detail.querySelector('[data-booking-marker]');
+  if (marker) { marker.innerHTML = bookingCard; }
+}
+
+// ─── PATCH SAVE CLIENT DATA TO INCLUDE BOOKING ───
+// Monkey-patch to inject booking fields when saveClient constructs data object
+const _saveClientData_orig = saveClient;
+
+// ═══════════════════════════════════════════
+// SYSTEM HEALTH ENGINE
+// ═══════════════════════════════════════════
+
+function calcSystemHealth(c) {
+  const checks = [];
+
+  // ── VOICE (W1) ──
+  if (c.w1) {
+    const setup = c.voiceSetup || {};
+    const creds = c.creds?.w1 || {};
+    checks.push({ id:'vapi_key',       label:'VAPI API Key',           status: creds.vapi_key     ? 'ok' : 'critical', group:'Voice' });
+    checks.push({ id:'vapi_phone',     label:'VAPI Phone Number',      status: creds.vapi_phone_id ? 'ok' : 'critical', group:'Voice' });
+    checks.push({ id:'vapi_assistant', label:'VAPI Assistant ID',      status: creds.vapi_assistant_id ? 'ok' : 'critical', group:'Voice' });
+    checks.push({ id:'ghl_key',        label:'GoHighLevel API Key',    status: creds.ghl_key       ? 'ok' : 'critical', group:'Voice' });
+    checks.push({ id:'make_w1',        label:'Make.com Webhook (W1)',  status: creds.make_webhook  ? 'ok' : 'critical', group:'Voice' });
+    checks.push({ id:'booking_url',    label:'Booking URL configured', status: c.bookingUrl        ? 'ok' : 'warn',     group:'Voice' });
+    checks.push({ id:'voice_forward',  label:'Call forwarding set up', status: setup.voice_forward ? 'ok' : 'warn',     group:'Voice' });
+    checks.push({ id:'voice_tested',   label:'Test call completed',    status: setup.voice_tested  ? 'ok' : 'warn',     group:'Voice' });
+  }
+
+  // ── WIN-BACK (W2) ──
+  if (c.w2) {
+    const setup = c.wbSetup || {};
+    const creds = c.creds?.w2 || {};
+    checks.push({ id:'twilio_sid',    label:'Twilio Account SID',     status: creds.twilio_sid    ? 'ok' : 'critical', group:'WinBack' });
+    checks.push({ id:'twilio_num',    label:'Twilio Phone Number',    status: creds.twilio_number ? 'ok' : 'critical', group:'WinBack' });
+    checks.push({ id:'make_w2',       label:'Make.com Webhook (W2)',  status: creds.make_webhook_w2 ? 'ok' : 'critical', group:'WinBack' });
+    checks.push({ id:'wb_list',       label:'Customer list imported', status: setup.wb_list_imported ? 'ok' : 'critical', group:'WinBack' });
+    checks.push({ id:'wb_consent',    label:'SMS consent confirmed',  status: setup.wb_consent_confirmed ? 'ok' : 'critical', group:'WinBack' });
+    checks.push({ id:'wb_msg_approved',label:'Messages approved',     status: setup.wb_messages_approved ? 'ok' : 'warn', group:'WinBack' });
+    checks.push({ id:'wb_tested',     label:'Test campaign sent',     status: setup.wb_tested     ? 'ok' : 'warn', group:'WinBack' });
+  }
+
+  // ── REVIEWS (W3) ──
+  if (c.w3) {
+    const gbp = c.gbpSetup || {};
+    checks.push({ id:'gbp_access',  label:'GBP Manager Access',      status: gbp.gbp_access  ? 'ok' : 'critical', group:'Reviews' });
+    checks.push({ id:'gbp_email',   label:'HappyGuest@ email live',  status: gbp.gbp_email   ? 'ok' : 'critical', group:'Reviews' });
+    checks.push({ id:'gbp_make',    label:'Make.com watcher built',  status: gbp.gbp_make    ? 'ok' : 'critical', group:'Reviews' });
+    checks.push({ id:'gbp_api',     label:'Google API approved',     status: gbp.gbp_api     ? 'ok' : 'warn',     group:'Reviews' });
+    checks.push({ id:'gbp_score',   label:'Drivyn Score recorded',   status: c.scoreBefore   ? 'ok' : 'warn',     group:'Reviews' });
+  }
+
+  // ── SMB PROFILE ──
+  checks.push({ id:'smb_email',    label:'Email on file',           status: c.email         ? 'ok' : 'warn', group:'Profile' });
+  checks.push({ id:'smb_phone',    label:'Phone on file',           status: c.phone         ? 'ok' : 'warn', group:'Profile' });
+  checks.push({ id:'smb_pos',      label:'POS system identified',   status: c.pos           ? 'ok' : 'warn', group:'Profile' });
+  checks.push({ id:'smb_services', label:'Services documented',     status: c.services      ? 'ok' : 'warn', group:'Profile' });
+  checks.push({ id:'smb_booking',  label:'Booking method set',      status: c.bookingType   ? 'ok' : 'warn', group:'Profile' });
+  checks.push({ id:'smb_zoho',     label:'Zoho invoice URL added',  status: c.zohoUrl       ? 'ok' : 'warn', group:'Profile' });
+
+  const criticalCount = checks.filter(ch => ch.status === 'critical').length;
+  const warnCount = checks.filter(ch => ch.status === 'warn').length;
+  const okCount = checks.filter(ch => ch.status === 'ok').length;
+  return { checks, criticalCount, warnCount, okCount, total: checks.length };
+}
+
+function renderSystemHealthBanner(c, sys) {
+  if (!sys.criticalCount && !sys.warnCount) return `
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--green-light);border:1px solid var(--green-mid);border-radius:var(--radius);margin-bottom:20px">
+      <span style="font-size:1.1rem">✅</span>
+      <span style="font-size:0.88rem;font-weight:700;color:var(--green)">All systems connected and running</span>
+      <span style="font-size:0.78rem;color:var(--muted);margin-left:auto">${sys.okCount}/${sys.total} checks passed</span>
+    </div>`;
+
+  // Group by category
+  const groups = {};
+  sys.checks.filter(ch => ch.status !== 'ok').forEach(ch => {
+    if (!groups[ch.group]) groups[ch.group] = [];
+    groups[ch.group].push(ch);
+  });
+
+  const groupIcons = { Voice:'📞', WinBack:'🔄', Reviews:'⭐', Profile:'🏢' };
+  const items = Object.entries(groups).map(([g, chs]) => {
+    const crits = chs.filter(ch => ch.status === 'critical');
+    const warns = chs.filter(ch => ch.status === 'warn');
+    return `<span style="font-size:0.78rem;font-weight:600">${groupIcons[g]||''} ${g}:</span> ` +
+      (crits.length ? `<span style="color:var(--red)">${crits.length} offline</span>` : '') +
+      (crits.length && warns.length ? ', ' : '') +
+      (warns.length ? `<span style="color:var(--amber)">${warns.length} warning</span>` : '');
+  }).join(' &nbsp;·&nbsp; ');
+
+  return `
+    <div style="padding:12px 16px;background:${sys.criticalCount?'var(--red-light)':'var(--amber-light)'};border:1px solid ${sys.criticalCount?'var(--red-mid)':'var(--amber-mid)'};border-radius:var(--radius);margin-bottom:20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <span style="font-size:1rem">${sys.criticalCount?'🔴':'⚠️'}</span>
+      <div style="flex:1">
+        <div style="font-size:0.85rem;font-weight:700;color:${sys.criticalCount?'var(--red)':'var(--amber)'}">
+          ${sys.criticalCount} critical · ${sys.warnCount} warnings need attention
+        </div>
+        <div style="font-size:0.78rem;color:var(--muted);margin-top:2px">${items}</div>
+      </div>
+      <button class="btn btn-ghost btn-xs" onclick="openEditClient('${c.id}')">Fix Now →</button>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════
+// VOICE INTELLIGENCE SETUP CHECKLIST
+// ═══════════════════════════════════════════
+
+function renderVoiceSetupChecklist(c) {
+  const setup = c.voiceSetup || {};
+  const creds = c.creds?.w1 || {};
+
+  const steps = [
+    // CLIENT DOES THESE
+    { id:'voice_forward',    label:'Call forwarding enabled — main number → VAPI number', who:'Client', auto:false,
+      note:'Client dials *72 + VAPI number (AT&T/Verizon) or uses phone provider portal to forward calls.',
+      status: setup.voice_forward ? 'ok' : !creds.vapi_phone_id ? 'blocked' : 'pending' },
+    { id:'voice_info_sent',  label:'Business info sent to Drivyn AI (services, hours, pricing)', who:'Client', auto:false,
+      note:'Client emails or texts the full service menu, hours, pricing, and any FAQ to ryan@getdrivynai.com.',
+      status: setup.voice_info_sent ? 'ok' : 'pending' },
+    // DRIVYN AI DOES THESE
+    { id:'vapi_assistant',   label:'VAPI assistant built and trained on client knowledge base', who:'Drivyn AI', auto:true,
+      note:'Alli trained on client\'s services, pricing, hours. Reads tire sizes, handles FAQs, escalates when needed.',
+      status: creds.vapi_key && creds.vapi_assistant_id ? 'ok' : 'pending' },
+    { id:'vapi_phone_conf',  label:'VAPI phone number configured and assigned', who:'Drivyn AI', auto:true,
+      note:'Dedicated VAPI number provisioned. Client forwards their main line to this number.',
+      status: creds.vapi_phone_id ? 'ok' : 'pending' },
+    { id:'ghl_pipeline',     label:'GoHighLevel pipeline and CRM configured', who:'Drivyn AI', auto:true,
+      note:'GHL subaccount created. Lead pipeline stages set: New → Qualified → Booked → Won/Lost.',
+      status: creds.ghl_key && creds.ghl_location_id ? 'ok' : 'pending' },
+    { id:'make_w1_built',    label:'Make.com automation scenario built', who:'Drivyn AI', auto:true,
+      note:'Scenario: VAPI call ends → extract lead info → create GHL contact → send booking SMS → notify owner.',
+      status: creds.make_webhook ? 'ok' : 'pending' },
+    { id:'booking_url_set',  label:'Booking URL configured in client profile', who:'Drivyn AI', auto:true,
+      note:'VAPI sends this URL via SMS after every qualified call. Cal.com, Calendly, or existing software link.',
+      status: c.bookingUrl ? 'ok' : 'pending' },
+    { id:'voice_tested',     label:'Test call completed — full flow verified', who:'Drivyn AI', auto:false,
+      note:'Call the client\'s number. Confirm VAPI answers, qualifies correctly, sends booking SMS, creates GHL lead.',
+      status: setup.voice_tested ? 'ok' : 'pending' },
+    { id:'voice_live',       label:'Client confirmed live — system handed off', who:'Drivyn AI', auto:false,
+      note:'Client notified the system is live. Dashboard updated. Onboarding stage advanced to Live.',
+      status: setup.voice_live ? 'ok' : 'pending' },
+  ];
+
+  const done = steps.filter(s => s.status === 'ok').length;
+  const pct = Math.round(done/steps.length*100);
+  const checks = c.voiceSetup || {};
+
+  return `
+  <div class="card mb-16">
+    <div class="card-header">
+      <div class="card-header-left">
+        <div class="card-title">📞 Voice Intelligence Setup</div>
+        <div class="card-subtitle">${done}/${steps.length} complete · ${pct}% ready</div>
+      </div>
+      ${pct===100?'<span class="badge badge-active">Live ✓</span>':`<span class="badge badge-${pct>50?'warning':'unpaid'}">${pct<20?'Not Started':pct<80?'In Progress':'Almost Live'}</span>`}
+    </div>
+    <div style="height:4px;background:var(--border)"><div style="height:100%;width:${pct}%;background:${pct===100?'var(--green)':'var(--accent)'};transition:width 0.4s"></div></div>
+    <div style="padding:12px">
+      ${steps.map(s => {
+        const checked = !!checks[s.id] || s.status === 'ok';
+        const isBlocked = s.status === 'blocked';
+        const icon = s.auto ? '🤖' : '👤';
+        return `<div style="display:flex;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border);align-items:flex-start">
+          <input type="checkbox" ${checked?'checked':''} ${isBlocked?'disabled':''}
+            onchange="toggleSetupStep('${c.id}','voiceSetup','${s.id}',this.checked)"
+            style="margin-top:3px;accent-color:var(--accent);cursor:pointer;width:15px;height:15px;flex-shrink:0">
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <span style="font-size:0.83rem;font-weight:${checked?'400':'600'};color:${checked?'var(--muted)':'var(--black)'};text-decoration:${checked?'line-through':''}">${s.label}</span>
+              <span style="font-size:0.6rem;padding:1px 6px;border-radius:100px;background:${s.auto?'var(--accent-light)':'var(--green-light)'};color:${s.auto?'var(--accent)':'var(--green)'};font-weight:700">${icon} ${s.who}</span>
+              ${isBlocked?'<span style="font-size:0.65rem;color:var(--red);font-weight:700">⛔ Blocked — configure VAPI first</span>':''}
+            </div>
+            <div style="font-size:0.73rem;color:var(--muted);margin-top:1px;line-height:1.5">${s.note}</div>
+          </div>
+        </div>`;
+      }).join('')}
+      <div style="margin-top:10px;padding:10px 12px;background:var(--accent-light);border-radius:var(--radius-sm);font-size:0.78rem;color:var(--accent)">
+        <b>Once live:</b> VAPI answers every call 24/7 → qualifies lead → sends booking link → creates GHL contact → notifies owner. Zero human involvement required.
+      </div>
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════
+// WIN-BACK SETUP CHECKLIST
+// ═══════════════════════════════════════════
+
+function renderWinBackSetupChecklist(c) {
+  const setup = c.wbSetup || {};
+  const creds = c.creds?.w2 || {};
+  const softwareMap = { vagaro:'Vagaro', mindbody:'Mindbody', square:'Square', jobber:'Jobber', servicetitan:'ServiceTitan', other:'their system' };
+  const posSoftware = softwareMap[c.bookingSoftware] || c.pos || 'their system';
+
+  const steps = [
+    // CLIENT
+    { id:'wb_list_exported',  label:`Customer list exported from ${posSoftware}`, who:'Client', auto:false,
+      note:`Client exports: customer name, phone, email, last visit date, last service type. CSV format preferred. Even a messy spreadsheet works.` },
+    { id:'wb_consent_confirmed', label:'SMS marketing consent confirmed', who:'Client', auto:false,
+      note:'Client confirms past customers agreed to receive texts at time of service. Required for TCPA compliance. Documented in SOF.' },
+    { id:'wb_messages_approved', label:'Win-back message sequences approved by client', who:'Client', auto:false,
+      note:'Client reviews Day 1, Day 3, Day 7 messages and approves tone, offer, and any discount amounts before first send.' },
+    // DRIVYN AI
+    { id:'wb_list_imported',  label:'Customer list cleaned and imported', who:'Drivyn AI', auto:true,
+      note:'NeverBounce removes invalid emails. Duplicates removed. Contacts segmented by recency: 60–90 days, 90–180 days, 180+ days.' },
+    { id:'wb_twilio_conf',    label:'Twilio number provisioned and configured', who:'Drivyn AI', auto:true,
+      note:'Dedicated Twilio number for this client. Configured in Make.com. Opt-out (STOP) handling active on all sequences.',
+      status: creds.twilio_sid && creds.twilio_number ? 'ok' : 'pending' },
+    { id:'wb_make_built',     label:'Make.com win-back scenario built', who:'Drivyn AI', auto:true,
+      note:'Scenario: trigger by recency segment → send Day 1 → wait for reply → if no reply, send Day 3 → if no reply, send Day 7 → stop.',
+      status: creds.make_webhook_w2 ? 'ok' : 'pending' },
+    { id:'wb_timing_set',     label:'Timing rules configured per vertical', who:'Drivyn AI', auto:true,
+      note:`${c.market==='Health & Wellness'?'Health: 60–90 day lapse window. Send 10am–6pm only.':c.market==='Home & Trade'?'Trade: 6–12 month lapse. Pre-season timing active.':c.market==='Restaurant & Hospitality'?'Restaurant: 6–8 week lapse. Weekend evenings preferred.':'Professional: 6–12 month lapse. Business hours only.'}` },
+    { id:'wb_tested',         label:'Test campaign sent to internal number', who:'Drivyn AI', auto:false,
+      note:'Send all 3 messages to a test number. Confirm timing, content, opt-out, and GHL lead creation all work correctly.' },
+    { id:'wb_first_batch',    label:'First batch approved and launched', who:'Drivyn AI', auto:false,
+      note:'Start with 60–90 day segment (warmest). Get client sign-off on first batch size. Monitor reply rate before scaling.' },
+    { id:'wb_live',           label:'Win-back system live — client notified', who:'Drivyn AI', auto:false,
+      note:'Client receives summary email: how many contacts in each segment, expected response rate, what to expect in first 72 hours.' },
+  ];
+
+  const done = steps.filter(s => !!setup[s.id] || s.status === 'ok').length;
+  const pct = Math.round(done/steps.length*100);
+
+  return `
+  <div class="card mb-16">
+    <div class="card-header">
+      <div class="card-header-left">
+        <div class="card-title">🔄 Win-Back Setup</div>
+        <div class="card-subtitle">${done}/${steps.length} complete · ${pct}% ready</div>
+      </div>
+      ${pct===100?'<span class="badge badge-active">Live ✓</span>':pct===0?'<span class="badge badge-unpaid">Not Started</span>':`<span class="badge badge-warning">In Progress</span>`}
+    </div>
+    <div style="height:4px;background:var(--border)"><div style="height:100%;width:${pct}%;background:${pct===100?'var(--green)':'var(--purple)'};transition:width 0.4s"></div></div>
+    <div style="padding:12px">
+      ${steps.map(s => {
+        const checked = !!setup[s.id] || s.status === 'ok';
+        const icon = s.auto ? '🤖' : '👤';
+        return `<div style="display:flex;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border);align-items:flex-start">
+          <input type="checkbox" ${checked?'checked':''}
+            onchange="toggleSetupStep('${c.id}','wbSetup','${s.id}',this.checked)"
+            style="margin-top:3px;accent-color:var(--purple);cursor:pointer;width:15px;height:15px;flex-shrink:0">
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <span style="font-size:0.83rem;font-weight:${checked?'400':'600'};color:${checked?'var(--muted)':'var(--black)'};text-decoration:${checked?'line-through':''}">${s.label}</span>
+              <span style="font-size:0.6rem;padding:1px 6px;border-radius:100px;background:${s.auto?'var(--accent-light)':'var(--green-light)'};color:${s.auto?'var(--accent)':'var(--green)'};font-weight:700">${icon} ${s.who}</span>
+            </div>
+            <div style="font-size:0.73rem;color:var(--muted);margin-top:1px;line-height:1.5">${s.note}</div>
+          </div>
+        </div>`;
+      }).join('')}
+      <div style="margin-top:10px;padding:10px 12px;background:var(--purple-light);border:1px solid rgba(107,63,201,0.2);border-radius:var(--radius-sm);font-size:0.78rem;color:var(--purple)">
+        <b>Compliance reminder:</b> Always start with the 60–90 day segment. Never send to contacts who haven't engaged in 2+ years without extra consent verification. STOP responses permanently remove the contact.
+      </div>
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════
+// SMB PROFILE SUMMARY CARD
+// ═══════════════════════════════════════════
+
+function renderSMBProfile(c) {
+  const posMap = {
+    vagaro:'Vagaro', mindbody:'Mindbody', square:'Square Appointments',
+    jane:'Jane App', jobber:'Jobber', servicetitan:'ServiceTitan',
+    housecall:'Housecall Pro', toast:'Toast', opentable:'OpenTable/Resy',
+    clio:'Clio', lightspeed:'Lightspeed', clover:'Clover', revel:'Revel',
+    none:'None / Paper', other:'Other',
+  };
+
+  const fields = [
+    { label:'Business', value:c.name, icon:'🏢', critical: !c.name },
+    { label:'Owner', value:c.owner||'—', icon:'👤', critical: !c.owner },
+    { label:'Email', value:c.email||'—', icon:'📧', warn: !c.email },
+    { label:'Phone', value:c.phone||'—', icon:'📱', warn: !c.phone },
+    { label:'Market', value:c.market||'—', icon:'📂', warn: !c.market },
+    { label:'Sub-Industry', value:c.subindustry||'—', icon:'🏷', warn: !c.subindustry },
+    { label:'POS System', value:posMap[c.pos]||c.pos||'Not set', icon:'💳', warn: !c.pos },
+    { label:'Booking Method', value:c.bookingType ? ({existing:'Existing link',calendly:'Calendly/Cal.com',buffer:'Buffer blocks',phone:'Phone callback'}[c.bookingType]||c.bookingType) : 'Not set', icon:'📅', warn: !c.bookingType },
+    { label:'Booking URL', value:c.bookingUrl ? '✓ Configured' : 'Not set', icon:'🔗', warn: !c.bookingUrl && c.bookingType && c.bookingType !== 'phone' && c.bookingType !== 'buffer' },
+    { label:'Services', value:c.services ? '✓ Documented' : 'Not documented', icon:'📋', warn: !c.services },
+    { label:'Service Area', value:c.serviceArea||'—', icon:'📍', warn: false },
+    { label:'Avg Value', value:c.avgValue ? fmtMoney(c.avgValue) : '—', icon:'💰', warn: !c.avgValue },
+    { label:'Zoho Invoice', value:c.zohoUrl ? '✓ Connected' : 'Not set', icon:'🧾', warn: !c.zohoUrl },
+  ];
+
+  const issues = fields.filter(f => f.critical || f.warn);
+
+  return `
+  <div class="card mb-16">
+    <div class="card-header">
+      <div class="card-header-left">
+        <div class="card-title">🏢 SMB Profile</div>
+        <div class="card-subtitle">${issues.length ? issues.length + ' field' + (issues.length>1?'s':'')+' incomplete' : 'Complete'}</div>
+      </div>
+      <button class="btn btn-ghost btn-xs" onclick="openEditClient('${c.id}')">Edit</button>
+    </div>
+    <div style="padding:10px 12px">
+      ${fields.map(f => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:0.72rem;color:var(--muted);display:flex;align-items:center;gap:5px">${f.icon} ${f.label}</span>
+          <span style="font-size:0.78rem;font-weight:${f.critical||f.warn?'700':'500'};color:${f.critical?'var(--red)':f.warn?'var(--amber)':'var(--black)'};text-align:right;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.value}</span>
+        </div>`).join('')}
+      ${issues.length ? `<button class="btn btn-primary btn-xs w-full" style="margin-top:10px" onclick="openEditClient('${c.id}')">Complete Profile →</button>` : ''}
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════
+// GENERIC SETUP STEP TOGGLE
+// ═══════════════════════════════════════════
+
+function toggleSetupStep(clientId, setupKey, stepId, checked) {
+  const c = state.clients.find(cl => cl.id === clientId);
+  if (!c) return;
+  if (!c[setupKey]) c[setupKey] = {};
+  c[setupKey][stepId] = checked;
+  const label = stepId.replace(/^[a-z]+_/,'').replace(/_/g,' ');
+  logActivity(clientId, `${setupKey==='voiceSetup'?'Voice':setupKey==='wbSetup'?'Win-Back':'Setup'}: ${label} ${checked?'✓':'unchecked'}`, checked?'var(--green)':'var(--muted)');
+  saveState();
+  renderClientDetail(clientId);
   showToast(checked ? 'Step marked complete' : 'Step unchecked', checked?'success':'info');
 }

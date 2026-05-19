@@ -722,6 +722,74 @@
           </div>
         </div>
         <div class="form-section">
+          <div class="form-section-title" style="color:var(--accent)">📅 Booking Setup</div>
+          <div class="form-group">
+            <label class="form-label form-label-required">Booking Method</label>
+            <select class="form-select" id="c-booking-type" onchange="onBookingTypeChange()">
+              <option value="">— Select booking method —</option>
+              <option value="existing">Use existing booking link (Vagaro, Mindbody, Square, etc.)</option>
+              <option value="calendly">Calendly / Cal.com link</option>
+              <option value="buffer">Buffer blocks — manual confirmation (no digital booking)</option>
+              <option value="phone">Phone only — VAPI books via callback</option>
+            </select>
+            <div class="form-hint" id="booking-type-hint"></div>
+          </div>
+          <div class="form-group" id="booking-url-wrap">
+            <label class="form-label form-label-required">Customer Booking URL</label>
+            <input type="text" class="form-input" id="c-booking-url" placeholder="e.g. vagaro.com/gracespa or calendly.com/yourname">
+            <div class="form-hint">This is the link VAPI sends via SMS after every qualified call. Test it before going live.</div>
+          </div>
+          <div class="form-group" id="booking-software-wrap" style="display:none">
+            <label class="form-label">Booking Software</label>
+            <select class="form-select" id="c-booking-software">
+              <option value="">— Select software —</option>
+              <option value="vagaro">Vagaro</option>
+              <option value="mindbody">Mindbody</option>
+              <option value="square">Square Appointments</option>
+              <option value="jane">Jane App</option>
+              <option value="acuity">Acuity Scheduling</option>
+              <option value="jobber">Jobber</option>
+              <option value="servicetitan">ServiceTitan</option>
+              <option value="housecall">Housecall Pro</option>
+              <option value="toast">Toast</option>
+              <option value="opentable">OpenTable / Resy</option>
+              <option value="clio">Clio (Legal)</option>
+              <option value="other">Other</option>
+            </select>
+            <div class="form-hint">Used to confirm Google Calendar sync is active and double-booking is prevented.</div>
+          </div>
+          <div id="booking-gcal-warn" style="display:none;padding:10px 12px;background:var(--amber-light);border:1px solid var(--amber-mid);border-radius:var(--radius-sm);font-size:0.78rem;color:var(--amber);margin-top:8px">
+            ⚠️ <strong>Google Calendar sync required.</strong> Ask client to connect their booking software to Google Calendar before going live. This prevents double-booking.
+          </div>
+          <div class="form-group" id="booking-buffer-wrap" style="display:none">
+            <label class="form-label">Buffer Block Options</label>
+            <select class="form-select" id="c-booking-buffer">
+              <option value="morning">Morning slots only (9am–12pm)</option>
+              <option value="afternoon">Afternoon slots only (1pm–5pm)</option>
+              <option value="both">Morning + Afternoon blocks</option>
+            </select>
+            <div class="form-hint">Customer picks a block. Staff confirms exact time via SMS within 2 hours.</div>
+          </div>
+          <div class="form-row" style="margin-top:8px">
+            <div class="form-group">
+              <label class="form-label">Booking Confirmation SMS Delay</label>
+              <select class="form-select" id="c-booking-sms-delay">
+                <option value="30">Send booking link 30 sec after call</option>
+                <option value="60">Send booking link 60 sec after call</option>
+                <option value="immediate">Send during call (VAPI reads link)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Reminder Timing</label>
+              <select class="form-select" id="c-booking-reminder">
+                <option value="24h">24 hrs before appointment</option>
+                <option value="24h_2h">24 hrs + 2 hrs before</option>
+                <option value="none">Software handles reminders</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="form-section">
           <div class="form-section-title">Vertical-Specific Details</div>
           <div class="form-group">
             <label class="form-label">Sub-Industry</label>
@@ -729,8 +797,41 @@
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label class="form-label">Primary Services Offered</label>
-              <textarea class="form-textarea" id="c-services" placeholder="List main services, treatments, or practice areas..." style="min-height:60px"></textarea>
+              <label class="form-label">POS / Business Software</label>
+              <select class="form-select" id="c-pos">
+                <option value="">— Select POS —</option>
+                <optgroup label="Health & Wellness">
+                  <option value="vagaro">Vagaro</option>
+                  <option value="mindbody">Mindbody</option>
+                  <option value="jane">Jane App</option>
+                  <option value="acuity">Acuity Scheduling</option>
+                </optgroup>
+                <optgroup label="Home & Trade">
+                  <option value="jobber">Jobber</option>
+                  <option value="servicetitan">ServiceTitan</option>
+                  <option value="housecall">Housecall Pro</option>
+                  <option value="companycam">CompanyCam</option>
+                </optgroup>
+                <optgroup label="Restaurant">
+                  <option value="toast">Toast</option>
+                  <option value="square">Square</option>
+                  <option value="clover">Clover</option>
+                  <option value="opentable">OpenTable / Resy</option>
+                  <option value="lightspeed">Lightspeed</option>
+                </optgroup>
+                <optgroup label="Professional Services">
+                  <option value="clio">Clio</option>
+                  <option value="mycase">MyCase</option>
+                  <option value="salesforce">Salesforce</option>
+                  <option value="hubspot">HubSpot</option>
+                </optgroup>
+                <optgroup label="General">
+                  <option value="square_gen">Square (General)</option>
+                  <option value="none">None / Paper-based</option>
+                  <option value="other">Other</option>
+                </optgroup>
+              </select>
+              <div class="form-hint">Used to configure win-back data import and Google Calendar sync.</div>
             </div>
             <div class="form-group">
               <label class="form-label">Service Area / Location</label>
